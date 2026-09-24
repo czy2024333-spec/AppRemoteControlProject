@@ -1,0 +1,23 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# 构建产物与本地 APK
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# Android Studio 本地配置
+.idea/
+*.hprof
+
+# Kotlin 构建缓存
+.kotlin/

@@ -61,9 +61,13 @@ fun TelemetryPanel(state: DeviceState, modifier: Modifier = Modifier) {
         TelemetryRow("模式", state.mode, highlight = state.mode == "EMERGENCY_STOP")
         TelemetryRow("位置", "X %.1f  Y %.1f  Z %.1f m".format(state.position.x, state.position.y, state.position.z))
         TelemetryRow("航向", "${state.yawDeg.toInt()}°")
-        TelemetryRow("速度", "%.2f m/s".format(state.speed))
+        TelemetryRow("速度", "%.2f m/s（垂 %.2f）".format(state.speed, state.vz))
         TelemetryRow("电量", "${state.batteryPercent}%", highlight = state.batteryPercent < 20)
         TelemetryRow("链路", state.linkState.label, highlight = state.linkState != LinkState.ONLINE)
+        if (state.qualityLabel.isNotEmpty()) {
+            // APP-004 / DAT-002：数据来源明确标记，接口测试数据不得冒充真实在线
+            TelemetryRow("数据源", state.qualityLabel, highlight = state.quality != "real")
+        }
         if (state.controller != null) TelemetryRow("控制权", state.controller!!)
         if (state.alarms.isNotEmpty()) {
             state.alarms.forEach { alarm ->

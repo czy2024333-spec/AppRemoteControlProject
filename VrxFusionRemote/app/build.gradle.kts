@@ -60,7 +60,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
-    // MQTT 客户端（IF-001: 标准化双向通信通道，统一控制服务默认走 MQTT）
-    implementation(libs.paho.mqtt.client)
+    // WebSocket 客户端（协议 v0.1：APP ⇄ 统一控制服务，W1 计划 FastAPI+WebSocket）
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     debugImplementation(libs.androidx.ui.tooling)
 }

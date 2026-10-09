@@ -13,23 +13,35 @@ import com.vrxfusion.remote.device.DeviceState
 import com.vrxfusion.remote.device.GaitPosture
 import com.vrxfusion.remote.device.RealityType
 import com.vrxfusion.remote.device.SimAction
-import com.vrxfusion.remote.protocol.MqttTransport
+import com.vrxfusion.remote.protocol.Role
+import com.vrxfusion.remote.protocol.WsTransport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
- * 主 ViewModel：串联设备目录、控制会话与运行模式（MVVM）。
+ * 主 ViewModel：登录角色、服务连接、设备目录、控制会话（MVVM）。
+ * 角色 B 首周交付：真机按钮→服务→设备链路；观察员不能控制（服务端强制 + UI 禁用）。
  */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val transport = MqttTransport(viewModelScope)
+    private val transport = WsTransport(viewModelScope)
     private val repository = DeviceRepository(viewModelScope, transport)
 
     val descriptors: StateFlow<List<DeviceDescriptor>> = repository.descriptors
     val states: StateFlow<Map<String, DeviceState>> = repository.states
     val runMode: StateFlow<DeviceRepository.RunMode> = repository.runMode
-    val mqttState: StateFlow<MqttTransport.ConnState> = transport.state
+    val connState: StateFlow<WsTransport.ConnState> = transport.state
+
+    /** 登录身份（APP-002） */
+    private val _role = MutableStateFlow(Role.OPERATOR)
+    val role: StateFlow<Role> = _role
+
+    private val _userName = MutableStateFlow("")
+    val userName: StateFlow<String> = _userName
+
+    private val _serverUrl = MutableStateFlow("ws://192.168.1.100:8765/ws")
+    val serverUrl: StateFlow<String> = _serverUrl
 
     /** 当前选中（待控制）设备 */
     private val _selected = MutableStateFlow<DeviceDescriptor?>(null)
@@ -49,6 +61,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stateOf(deviceId: String): DeviceState = repository.stateOf(deviceId)
 
+    // ---- 登录与连接（APP-002：登录及权限管理） ----
+
+    fun setServerUrl(url: String) { _serverUrl.value = url }
+    fun setUserName(name: String) { _userName.value = name }
+    fun setRole(r: Role) { _role.value = r }
+
+    fun connect() {
+        if (_userName.value.isBlank()) _userName.value = "operator-01"
+        transport.connect(_serverUrl.value.trim(), _role.value, _userName.value.trim())
+    }
+
+    fun disconnect() = transport.disconnect()
+
+    // ---- 设备选择与控制 ----
+
     fun selectDevice(d: DeviceDescriptor) {
         abandonSession()
         _selected.value = d
@@ -60,15 +87,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun switchRunMode(mode: DeviceRepository.RunMode) {
-        // MODE-005：模式切换须明确提示指令接收对象 —— UI 层弹窗确认
         repository.switchRunMode(mode)
     }
 
     fun requestAuthority() {
+        if (!_role.value.canControl) return   // 观察员不能控制（APP-002）
         val d = _selected.value ?: return
+        if (d.reserved) return                 // 预留接口禁用（EXT-004）
         val adapter = repository.adapterOf(d.id) ?: return
         abandonSession()
-        val s = ControlSession(viewModelScope, adapter)
+        val s = ControlSession(viewModelScope, adapter, operatorName = transport.mySrc)
         s.requestAuthority()
         session = s
         viewModelScope.launch {
@@ -99,7 +127,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun sendRtl() = session?.sendCommand(DeviceCommand.ReturnHome)
 
     fun sendSimAction(action: SimAction) {
-        // SAFE-005：仿真管理指令只允许发往虚拟/绑定设备 —— 控制层再做一次硬校验
+        // EXT-004 / SAFE-005：仿真管理指令只允许发往本地虚拟设备，不得路由至实机类型
         val d = _selected.value ?: return
         if (d.reality == RealityType.REAL) return
         if (Capability.SIM_MANAGE !in d.capabilities) return

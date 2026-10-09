@@ -42,7 +42,11 @@ data class DeviceDescriptor(
     val model: String,
     /** 绑定的对端设备编号（RealityType.BOUND 时有效，MAP-001 唯一绑定） */
     val boundTo: String? = null,
-    val capabilities: Set<Capability> = setOf(Capability.TELEMETRY)
+    val capabilities: Set<Capability> = setOf(Capability.TELEMETRY),
+    /** 预留接口设备（EXT-001/002）：本期未接入，APP 中禁用控制（EXT-004） */
+    val reserved: Boolean = false,
+    /** 预留说明（如"机器狗暂缓，仅预留 EXT-002"） */
+    val reservedNote: String? = null
 )
 
 enum class LinkState(val label: String) {
@@ -62,10 +66,28 @@ data class DeviceState(
     val yawDeg: Float = 0f,
     /** 水平合速度，单位：m/s */
     val speed: Float = 0f,
+    /** 垂直速度，单位：m/s */
+    val vz: Float = 0f,
     val mode: String = "IDLE",
+    /** 数据质量标记 —— DAT-002：sim_truth/sim_meas/iface_test/real */
+    val quality: String = "",
     val linkState: LinkState = LinkState.OFFLINE,
     val alarms: List<String> = emptyList(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     val batteryPercent: Int get() = (battery.coerceIn(0f, 1f) * 100).toInt()
+
+    /** 状态过期判定 —— APP-005：过期不得显示为实时数据 */
+    val isStale: Boolean
+        get() = System.currentTimeMillis() - updatedAt >
+            com.vrxfusion.remote.protocol.Protocol.STATE_STALE_MS
+
+    val qualityLabel: String
+        get() = when (quality) {
+            "sim_truth" -> "仿真真值"
+            "sim_meas" -> "模拟测量"
+            "iface_test" -> "接口测试数据"
+            "real" -> "实机数据"
+            else -> ""
+        }
 }

@@ -21,3 +21,8 @@ local.properties
 
 # Kotlin 构建缓存
 .kotlin/
+
+# 服务端运行产物
+server/service.db
+server/logs/
+server/__pycache__/

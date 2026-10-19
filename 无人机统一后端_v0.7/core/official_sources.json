@@ -1,0 +1,68 @@
+{
+  "repository": "https://github.com/spencerfolk/rotorpy",
+  "commit": "40b09697a6a1596d404a67f459941d46a39eedd3",
+  "expected_package_version": "3.0.0",
+  "retrieved_at": "2026-10-09T11:14:37.097300+00:00",
+  "files": [
+    {
+      "path": "vendor/examples/basic_usage.py",
+      "source": "examples/basic_usage.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/examples/basic_usage.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "44155451ec9d960654c4e37f8b9132a10ce27340ded630864b25454a81dd2ba4"
+    },
+    {
+      "path": "vendor/rotorpy/worlds/double_pillar.json",
+      "source": "rotorpy/worlds/double_pillar.json",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/worlds/double_pillar.json?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "5180dc6a566dde4aebd14aaa97da84f566f550dc705b26c8fd0d2a50d3b793e5"
+    },
+    {
+      "path": "vendor/LICENSE.md",
+      "source": "LICENSE.md",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/LICENSE.md?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "2d071d5adbe090f4c3e55ca49a7e1821d8b5353fb813f8b6f37350494a587666"
+    },
+    {
+      "path": "vendor/pyproject.toml",
+      "source": "pyproject.toml",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/pyproject.toml?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "fa41a6bf299b65795ae1593e4e231f7c86a1280520e40e78754f7a61c39fb950"
+    },
+    {
+      "path": "vendor/rotorpy/vehicles/crazyflie_params.py",
+      "source": "rotorpy/vehicles/crazyflie_params.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/vehicles/crazyflie_params.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "56847710dfd921c9247d62b7385d227653b2535c474053170ab2da408c3eb2f1"
+    },
+    {
+      "path": "vendor/rotorpy/controllers/quadrotor_control.py",
+      "source": "rotorpy/controllers/quadrotor_control.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/controllers/quadrotor_control.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "54ccd85eb4284b1aecbd7a06697311ab406f10a33a8d4855bc2390f4821cd927"
+    },
+    {
+      "path": "vendor/rotorpy/trajectories/hover_traj.py",
+      "source": "rotorpy/trajectories/hover_traj.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/trajectories/hover_traj.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "7c501d58e966e18ce310b35ac895b39fae68ac121002d1406584c95e9e55188f"
+    },
+    {
+      "path": "vendor/rotorpy/vehicles/multirotor.py",
+      "source": "rotorpy/vehicles/multirotor.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/vehicles/multirotor.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "ef6fe4f31e85216e7635d9f7f42fda5945c2fcb8be232a0f9a89e8572d5438fb"
+    },
+    {
+      "path": "vendor/rotorpy/environments.py",
+      "source": "rotorpy/environments.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/environments.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "c7e1a1dc168632cbcd93b05d797267f5388c7f72940f9ba51a6b84cdd6232e44"
+    },
+    {
+      "path": "vendor/rotorpy/simulate.py",
+      "source": "rotorpy/simulate.py",
+      "url": "https://api.github.com/repos/spencerfolk/rotorpy/contents/rotorpy/simulate.py?ref=40b09697a6a1596d404a67f459941d46a39eedd3",
+      "sha256": "2368253b379b61a3d34468013d74d10161b5a59c362df8e3b4ca0d400e0ffb54"
+    }
+  ]
+}

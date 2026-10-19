@@ -1,0 +1,868 @@
+import time
+from enum import Enum
+import copy
+import numpy as np
+try:
+    import roma
+    import torch
+except ImportError:
+    pass
+from numpy.linalg import norm
+from scipy.spatial.transform import Rotation
+from time import perf_counter
+ 
+import rotorpy.wind
+from rotorpy.controllers.quadrotor_control import BatchedSE3Control
+from rotorpy.vehicles.multirotor import BatchedMultirotor
+
+
+class ExitStatus(Enum):
+    """ Exit status values indicate the reason for simulation termination. """
+    COMPLETE     = 'Success: End reached.'
+    TIMEOUT      = 'Timeout: Simulation end time reached.'
+    INF_VALUE    = 'Failure: Your controller returned inf motor speeds.'
+    NAN_VALUE    = 'Failure: Your controller returned nan motor speeds.'
+    OVER_SPEED   = 'Failure: Your quadrotor is out of control; it is going faster than 100 m/s. The Guinness World Speed Record is 73 m/s.'
+    OVER_SPIN    = 'Failure: Your quadrotor is out of control; it is spinning faster than 100 rad/s. The onboard IMU can only measure up to 52 rad/s (3000 deg/s).'
+    FLY_AWAY     = 'Failure: Your quadrotor is out of control; it flew away with a position error greater than 20 meters.'
+    COLLISION    = 'Failure: Your quadrotor collided with an object.'
+
+def simulate(world, initial_state, vehicle, controller, trajectory, wind_profile, imu, mocap, estimator, t_final, t_step, safety_margin, use_mocap, terminate=None, print_fps=False, camera=None):
+    """
+    Perform a vehicle simulation and return the numerical results.
+
+    Inputs:
+        world, a class representing the world it is flying in, including objects and world bounds. 
+        initial_state, a dict defining the vehicle initial conditions with appropriate keys
+        vehicle, Vehicle object containing the dynamics
+        controller, Controller object containing the controller
+        trajectory, Trajectory object containing the trajectory to follow
+        wind_profile, Wind Profile object containing the wind generator. 
+        t_final, maximum duration of simulation, s
+        t_step, the time between each step in the simulator, s
+        safety_margin, the radius of the ball surrounding the vehicle position to determine if a collision occurs
+        imu, IMU object that generates accelerometer and gyroscope readings from the vehicle state
+        terminate, None, False, or a function of time and state that returns
+            ExitStatus. If None (default), terminate when hover is reached at
+            the location of trajectory with t=inf. If False, never terminate
+            before timeout or error. If a function, terminate when returns not
+            None.
+        mocap, a MotionCapture object that provides noisy measurements of pose and twist with artifacts. 
+        use_mocap, a boolean to determine in noisy measurements from mocap should be used for quadrotor control
+        estimator, an estimator object that provides estimates of a portion or all of the vehicle state.
+        camera, an optional PinholeCamera object that renders images of the world from the
+            vehicle state. Frames are captured at the camera's frame_rate (every
+            simulation step if frame_rate is None). If None (default), no camera
+            data is collected.
+
+    Outputs:
+        time, seconds, shape=(N,)
+        state, a dict describing the state history with keys
+            x, position, m, shape=(N,3)
+            v, linear velocity, m/s, shape=(N,3)
+            q, quaternion [i,j,k,w], shape=(N,4)
+            w, angular velocity, rad/s, shape=(N,3)
+            rotor_speeds, motor speeds, rad/s, shape=(N,n) where n is the number of rotors
+            wind, wind velocity, m/s, shape=(N,3)
+        control, a dict describing the command input history with keys
+            cmd_motor_speeds, motor speeds, rad/s, shape=(N,4)
+            cmd_q, commanded orientation (not used by simulator), quaternion [i,j,k,w], shape=(N,4)
+            cmd_w, commanded angular velocity (not used by simulator), rad/s, shape=(N,3)
+        flat, a dict describing the desired flat outputs from the trajectory with keys
+            x,        position, m
+            x_dot,    velocity, m/s
+            x_ddot,   acceleration, m/s**2
+            x_dddot,  jerk, m/s**3
+            x_ddddot, snap, m/s**4
+            yaw,      yaw angle, rad
+            yaw_dot,  yaw rate, rad/s
+        imu_measurements, a dict containing the biased and noisy measurements from an accelerometer and gyroscope
+            accel,  accelerometer, m/s**2
+            gyro,   gyroscope, rad/s
+        imu_gt, a dict containing the ground truth (no noise, no bias) measurements from an accelerometer and gyroscope
+            accel,  accelerometer, m/s**2
+            gyro,   gyroscope, rad/s
+        mocap_measurements, a dict containing noisy measurements of pose and twist for the vehicle. 
+            x, position (inertial)
+            v, velocity (inertial)
+            q, orientation of body w.r.t. inertial frame.
+            w, body rates in the body frame. 
+        exit_status, an ExitStatus enum indicating the reason for termination.
+        camera_measurements, None if no camera was supplied, otherwise a dict of stacked
+            camera measurements with K frames captured at times camera_measurements['time'].
+            The fixed-size outputs of measurement() are stacked over frames while the
+            variable-size ones are stored as per-frame lists:
+                time, frame timestamps, s, shape=(K,), a subset of `time`
+                image, rendered frames as uint8 (float [0,1] scaled by 255), shape=(K,H,W,3)
+                visible_mask, bool over all world features, shape=(K,N)
+                projected, pixels of all features, shape=(K,N,2)
+                depth, camera-frame z of all features, shape=(K,N)
+                keypoints, list of K (M_k,2) arrays of visible feature pixels
+                keypoint_depths, list of K (M_k,) arrays of visible feature depths
+                visible_features, list of K (M_k,3) arrays of visible feature positions
+    """
+
+    # Coerce entries of initial state into numpy arrays, if they are not already.
+    initial_state = {k: np.array(v) for k, v in initial_state.items()}
+
+    if terminate is None:    # Default exit. Terminate at final position of trajectory.
+        normal_exit = traj_end_exit(initial_state, trajectory, using_vio = False)
+    elif terminate is False: # Never exit before timeout.
+        normal_exit = lambda t, s: None
+    else:                    # Custom exit.
+        normal_exit = terminate
+
+    time    = [0]
+    state   = [copy.deepcopy(initial_state)]
+    state[0]['wind'] = wind_profile.update(0, state[0]['x'])   # TODO: move this line elsewhere so that other objects that don't have wind as a state can work here. 
+    imu_measurements = []
+    mocap_measurements = []
+    imu_gt = []
+    state_estimate = []
+    flat    = [trajectory.update(time[-1])]
+    mocap_measurements.append(mocap.measurement(state[-1], with_noise=True, with_artifacts=False))
+    if use_mocap:
+        # In this case the controller will use the motion capture estimate of the pose and twist for control. 
+        control = [controller.update(time[-1], mocap_measurements[-1], flat[-1])]
+    else:
+        control = [controller.update(time[-1], state[-1], flat[-1])]
+    state_dot =  vehicle.statedot(state[0], control[0], t_step)
+    imu_measurements.append(imu.measurement(state[-1], state_dot, with_noise=True))
+    imu_gt.append(imu.measurement(state[-1], state_dot, with_noise=False))
+    state_estimate.append(estimator.step(state[0], control[0], imu_measurements[0], mocap_measurements[0]))
+
+    # Optional camera: frames are captured at the camera's frame_rate (every
+    # simulation step if frame_rate is None). Images are stored as uint8 to
+    # keep the result dict a manageable size; see merge_camera_measurements().
+    camera_measurements = None
+    if camera is not None:
+        frame_rate = getattr(camera, 'frame_rate', None)
+        camera_period = 1.0 / frame_rate if frame_rate else t_step
+        next_camera_time = -np.inf  # Always capture the first frame.
+        camera_frames = []
+        camera_times = []
+
+    def capture_camera(t, s):
+        nonlocal next_camera_time
+        camera_frames.append(camera.measurement(s, world))
+        camera_times.append(t)
+        next_camera_time = t + camera_period
+
+    if camera is not None:
+        capture_camera(time[-1], state[-1])
+
+    exit_status = None
+
+    while True:
+        step_start_time = perf_counter()
+        exit_status = exit_status or safety_exit(world, safety_margin, state[-1], flat[-1], control[-1])
+        exit_status = exit_status or normal_exit(time[-1], state[-1])
+        exit_status = exit_status or time_exit(time[-1], t_final)
+        if exit_status:
+            break
+        time.append(time[-1] + t_step)
+        state[-1]['wind'] = wind_profile.update(time[-1], state[-1]['x'])
+        state.append(vehicle.step(state[-1], control[-1], t_step))
+        flat.append(trajectory.update(time[-1]))
+        mocap_measurements.append(mocap.measurement(state[-1], with_noise=True, with_artifacts=mocap.with_artifacts))
+        state_estimate.append(estimator.step(state[-1], control[-1], imu_measurements[-1], mocap_measurements[-1]))
+        if use_mocap:
+            control.append(controller.update(time[-1], mocap_measurements[-1], flat[-1]))
+        else:
+            control.append(controller.update(time[-1], state[-1], flat[-1]))
+        state_dot = vehicle.statedot(state[-1], control[-1], t_step)
+        imu_measurements.append(imu.measurement(state[-1], state_dot, with_noise=True))
+        imu_gt.append(imu.measurement(state[-1], state_dot, with_noise=False))
+        if camera is not None and time[-1] >= next_camera_time - 1e-9:
+            capture_camera(time[-1], state[-1])
+
+        wall_dt = max(perf_counter() - step_start_time, 1e-6)
+        fps = 1/wall_dt
+        if print_fps:
+            print(f"FPS is {fps}")
+
+    time    = np.array(time, dtype=float)    
+    state   = merge_dicts(state)
+    imu_measurements = merge_dicts(imu_measurements)
+    imu_gt = merge_dicts(imu_gt)
+    mocap_measurements = merge_dicts(mocap_measurements)
+    control         = merge_dicts(control)
+    flat            = merge_dicts(flat)
+    state_estimate  = merge_dicts(state_estimate)
+    if camera is not None:
+        camera_measurements = merge_camera_measurements(camera_frames, camera_times)
+
+    return (time, state, control, flat, imu_measurements, imu_gt, mocap_measurements, state_estimate, exit_status, camera_measurements)
+
+def merge_camera_measurements(frames, times):
+    """
+    Combine a list of camera measurement dicts (as returned by
+    PinholeCamera.measurement()) into a single dict.
+
+    Fixed-size outputs (image, visible_mask, projected, depth, colors,
+    descriptors) are stacked over frames. The image is converted from float32
+    in [0, 1] to uint8 to keep the memory footprint manageable; divide by 255.0
+    to recover floats. Variable size outputs (keypoints, keypoint_depths,
+    visible_features, visible_colors, visible_descriptors) are kept as lists
+    of per-frame arrays since their lengths vary between frames. Keys for data
+    the camera opted out of (feature_output 'rgb' or 'descriptors', or a world
+    without descriptor vectors) are returned as None.
+
+    Inputs:
+        frames, list of K measurement dicts from PinholeCamera.measurement()
+        times, list of K frame timestamps, s
+
+    Outputs:
+        camera_measurements, a dict with keys
+            time, (K,) array of frame timestamps
+            image, (K, H, W, 3) uint8 array of frames
+            visible_mask, (K, N) bool array over all world features
+            projected, (K, N, 2) array of pixels of all features
+            depth, (K, N) array of camera-frame z of all features
+            colors, (K, N, 3) array of RGB feature colors, or None when the
+                camera's feature_output is 'descriptors'
+            descriptors, (K, N, D) array of generic feature descriptor vectors,
+                or None when the camera's feature_output is 'rgb' or the world
+                carries no descriptor vectors
+            keypoints, list of K (M_k, 2) arrays
+            keypoint_depths, list of K (M_k,) arrays
+            visible_features, list of K (M_k, 3) arrays
+            visible_colors, list of K (M_k, 3) arrays, or None when the
+                camera's feature_output is 'descriptors'
+            visible_descriptors, list of K (M_k, D) arrays, or None when the
+                camera's feature_output is 'rgb' or the world carries no
+                descriptor vectors
+    """
+    has_colors = bool(frames) and frames[0].get('colors') is not None
+    has_descriptors = bool(frames) and frames[0].get('descriptors') is not None
+    return {
+        'time': np.array(times, dtype=float),
+        'image': np.stack([np.round(np.clip(f['image'], 0.0, 1.0)*255.0).astype(np.uint8) for f in frames]),
+        'visible_mask': np.stack([f['visible_mask'] for f in frames]),
+        'projected': np.stack([f['projected'] for f in frames]),
+        'depth': np.stack([f['depth'] for f in frames]),
+        'colors': (np.stack([f['colors'] for f in frames]) if has_colors else None),
+        'descriptors': (np.stack([f['descriptors'] for f in frames]) if has_descriptors else None),
+        'keypoints': [f['keypoints'] for f in frames],
+        'keypoint_depths': [f['keypoint_depths'] for f in frames],
+        'visible_features': [f['visible_features'] for f in frames],
+        'visible_colors': ([f['visible_colors'] for f in frames] if has_colors else None),
+        'visible_descriptors': ([f['visible_descriptors'] for f in frames] if has_descriptors else None),
+    }
+
+def merge_dicts(dicts_in):
+    """
+    Concatenates contents of a list of N state dicts into a single dict by
+    prepending a new dimension of size N. This is more convenient for plotting
+    and analysis. Requires dicts to have consistent keys and have values that
+    are numpy arrays.
+    """
+    dict_out = {}
+    for k in dicts_in[0].keys():
+        dict_out[k] = []
+        for d in dicts_in:
+            dict_out[k].append(d[k])
+        dict_out[k] = np.array(dict_out[k])
+    return dict_out
+
+
+def traj_end_exit(initial_state, trajectory, using_vio = False):
+    """
+    Returns a exit function. The exit function returns an exit status message if
+    the quadrotor is near hover at the end of the provided trajectory. If the
+    initial state is already at the end of the trajectory, the simulation will
+    run for at least one second before testing again.
+    """
+
+    xf = trajectory.update(np.inf)['x']
+    yawf = trajectory.update(np.inf)['yaw']
+    rotf = Rotation.from_rotvec(yawf * np.array([0, 0, 1])) # create rotation object that describes yaw
+    if np.array_equal(initial_state['x'], xf):
+        min_time = 1.0
+    else:
+        min_time = 0
+
+    def exit_fn(time, state):
+        cur_attitude = Rotation.from_quat(state['q'])
+        err_attitude = rotf * cur_attitude.inv() # Rotation between current and final
+        angle = norm(err_attitude.as_rotvec()) # angle in radians from vertical
+        # Success is reaching near-zero speed with near-zero position error.
+        if using_vio:
+            # set larger threshold for VIO due to noisy measurements
+            if time >= min_time and norm(state['x'] - xf) < 1 and norm(state['v']) <= 1 and angle <= 1:
+                return ExitStatus.COMPLETE
+        else:
+            if time >= min_time and norm(state['x'] - xf) < 0.02 and norm(state['v']) <= 0.03 and angle <= 0.02:
+                return ExitStatus.COMPLETE
+        return None
+    return exit_fn
+
+def time_exit(time, t_final):
+    """
+    Return exit status if the time exceeds t_final, otherwise None.
+    """
+    if time >= t_final:
+        return ExitStatus.TIMEOUT
+    return None
+
+def safety_exit(world, margin, state, flat, control):
+    """
+    Return exit status if any safety condition is violated, otherwise None.
+    """
+    if np.any(np.abs(state['v']) > 20):
+        return ExitStatus.OVER_SPEED
+    if np.any(np.abs(state['w']) > 100):
+        return ExitStatus.OVER_SPIN
+
+    if len(world.world.get('blocks', [])) > 0:
+        # If a world has objects in it we need to check for collisions.  
+        collision_pts = world.path_collisions(state['x'], margin)
+        no_collision = collision_pts.size == 0
+        if not no_collision:
+            return ExitStatus.COLLISION
+    return None
+
+
+def simulate_batch(world,
+                   initial_states,
+                   vehicles: BatchedMultirotor,
+                   controller: BatchedSE3Control,
+                   trajectories,
+                   wind_profile,
+                   imu,
+                   t_final,
+                   t_step,
+                   safety_margin,
+                   terminate=None,
+                   start_times=None,
+                   print_fps=False,
+                   camera=None,
+                   check_collisions=True):
+    """
+    Simultaneously performs many vehicle simulations and returns the numerical results.
+    Note that, currently, compared to the normal simulate() function, simulate_batch() does not support
+    mocap, or the state estimator. See examples/batched_simulation.py for usage.
+
+    Inputs:
+        world, a single World object shared by all drones in the batch, or a
+            list/tuple of length B of Worlds (None for an empty world) for
+            per-drone environments. When a list is given, camera rendering and
+            collision checking are both done against each drone's own world.
+        initial_states, a dict of torch tensors defining the vehicle initial conditions with appropriate keys. See `BatchedMultirotor` for details.
+        vehicles, Vehicle object containing the dynamics
+        controller, BatchedController object containing the controller
+        trajectories, BatchedTrajectory object containing the trajectories to follow
+        wind_profile, Batched Wind Profile object containing the wind generator.
+        imu: BatchedIMU object
+        t_final, array of maximum simulation durations for each vehicle in the batch, s
+        t_step, float, the time between each step in the simulator, s (shared across drones)
+        safety_margin, the radius of the ball surrounding the vehicle position to determine if a collision occurs
+        terminate, None, False, or a function of time and state that returns
+            an array of bools (one per drone) marking which drones should stop.
+            If None (default), terminate when hover is reached at the location
+            of trajectory with t=inf. If False, never terminate before timeout
+            or error. If a function, terminate where it returns nonzero/True;
+            returning None (or 0 for every drone) keeps all drones running.
+        start_times: array (B,) indicating the times at which each drone in the batch should start. Useful if the
+            different drones start at different points along their reference trajectories. Defaults to 0 for all if None.
+        print_fps: bool, whether or not to print the FPS achieved by the simulation at each step.
+        camera, BatchedPinholeCamera object (or None for no camera). When
+            supplied, a frame is captured at times t=0, 1/frame_rate, ... from
+            the drones that are still running, and the measurements are merged
+            into camera_measurements (see merge_batch_camera_measurements()).
+        check_collisions, bool. If True (default), drones are checked each step
+            against the world blocks and bounds using ``safety_margin`` and
+            collide as soon as they touch a block or leave the world. The block
+            geometry is precomputed once into tensors on the same device as the
+            vehicle states, so the per-step check runs on the accelerator with
+            no numpy/CPU round-trip. Set to False to skip the (small) per-step
+            cost when obstacles are known not to come into play.
+
+    Outputs:
+        time, seconds, numpy array of shape=(num_drones, N,) where N is the maximum number of timesteps by any drone in the batch
+        state, a dict describing the state history with keys
+            x, position, m, numpy array of shape=(N,B,3) where B is the number of drones in the batch
+            v, linear velocity, m/s, numpy array of shape=(N,B,3)
+            q, quaternion [i,j,k,w], numpy array of shape=(N,B,4)
+            w, angular velocity, rad/s, numpy array of shape=(N,B,3)
+            rotor_speeds, motor speeds, rad/s, numpy array of shape=(N,B,n) where n is the number of rotors
+            wind, wind velocity, m/s, numpy array of shape=(N,B,3)
+
+        control, a dict describing the command input history with keys
+            cmd_motor_speeds, motor speeds, rad/s, numpy array of shape=(N,B,4)
+            cmd_q, commanded orientation (not used by simulator), quaternion [i,j,k,w], shape=(N,B,4)
+            cmd_w, commanded angular velocity (not used by simulator), rad/s, shape=(N,B,3)
+        flat, a dict describing the desired flat outputs from the trajectory with keys
+            x,        position, m
+            x_dot,    velocity, m/s
+            x_ddot,   acceleration, m/s**2
+            x_dddot,  jerk, m/s**3
+            x_ddddot, snap, m/s**4
+            yaw,      yaw angle, rad
+            yaw_dot,  yaw rate, rad/s
+        exit_status, an array of ExitStatus enums indicating the reason for termination for each drone.
+        exit_timesteps, an array indicating at which timestep each vehicle in the batch terminated, shape = (B).
+            For efficiency, if drone i terminates at timestep n < N, the outputs in 'state', 'control', 'imu', 'imu_gt', and 'flat'
+            for that drone for all subsequent timesteps will be NaN. 'exit_timesteps' contains the value n for each drone in the batch.
+        camera_measurements, None if no camera was supplied, otherwise a dict of stacked
+            camera measurements with K frames captured at times camera_measurements['time']. See
+            merge_batch_camera_measurements() for the keys and shapes.
+    """
+
+    assert(torch.is_tensor(initial_states[k]) for k in initial_states.keys())
+
+    if wind_profile is None:
+        wind_profile = rotorpy.wind.default_winds.BatchedNoWind(vehicles.num_drones)
+    t_final = np.array(t_final)
+
+    if terminate is None:    # Default exit. Terminate at final position of trajectory.
+        normal_exit = traj_end_exit_batch(initial_states, trajectories, using_vio = False)
+    elif terminate is False: # Never exit before timeout.
+        normal_exit = lambda t, s: None
+    else:                    # Custom exit.
+        normal_exit = terminate
+
+    if start_times is None:
+        time_array = [np.zeros(vehicles.num_drones)]
+    else:
+        time_array = [start_times]
+    exit_status = np.array([None] * vehicles.num_drones)
+    done = np.zeros(vehicles.num_drones, dtype=bool)
+    running_idxs = np.arange(vehicles.num_drones)
+    exit_timesteps = np.zeros(vehicles.num_drones, dtype=int)
+    state   = [copy.deepcopy(initial_states)]
+    flat    = [trajectories.update(time_array[-1])]
+    control = [controller.update(time_array[-1], state[-1], flat[-1], idxs=None)]
+    statedot = vehicles.statedot(state[-1], control[-1], t_step, running_idxs.flatten())
+    imu_measurements = [imu.measurement(state[-1], statedot, with_noise=True)]
+    imu_gt = [imu.measurement(state[-1], statedot, with_noise=False)]
+    step = 0
+    total_num_frames = 0
+    total_time = 0
+
+    # Optional camera: frames are captured at the camera's frame_rate (every
+    # simulation step if frame_rate is None) from the drones that are still
+    # running. Images are stored as uint8 and per-drone feature outputs are
+    # kept in (K, B) object arrays; see merge_batch_camera_measurements().
+    camera_measurements = None
+    if camera is not None:
+        frame_rate = getattr(camera, 'frame_rate', None)
+        camera_period = 1.0 / frame_rate if frame_rate else t_step
+        next_camera_time = -np.inf  # Always capture the first frame.
+        camera_frames = []
+        camera_times = []
+
+    def capture_camera(t, idxs):
+        nonlocal next_camera_time
+        idxs = np.asarray(idxs, dtype=int)
+        if idxs.size == 0:
+            return
+        cam_worlds = [world[b] for b in idxs] if isinstance(world, (list, tuple)) else world
+        camera_frames.append((camera.measurement(cam_worlds,
+                                                 {'x': state[-1]['x'][idxs, :].contiguous(),
+                                                  'q': state[-1]['q'][idxs, :].contiguous()}),
+                              idxs.copy()))
+        camera_times.append(t)
+        next_camera_time = t + camera_period
+
+    if camera is not None:
+        capture_camera(float(time_array[-1][0]), np.arange(vehicles.num_drones))
+
+    # Precompute the collision geometry on the vehicle's device so the per-step
+    # check never round-trips the state to numpy. The heavy arithmetic then
+    # runs on the GPU/accelerator when the state tensors live there.
+    collision_tensors = None
+    if check_collisions:
+        collision_tensors = world_collision_tensors(world, initial_states['x'].device, initial_states['x'].dtype)
+
+    while True:
+        step_start_time = time.time()
+        prev_status = np.array(done, dtype=bool)
+        ste, ce = safety_exit_batch(world, safety_margin, state[-1], flat[-1], control[-1],
+                                    check_collisions, collision_tensors)
+        ne = normal_exit(time_array[-1], state[-1])
+        ne = np.zeros(vehicles.num_drones, dtype=bool) if ne is None else np.asarray(ne, dtype=bool)
+        te = time_exit_batch(time_array[-1], t_final)
+
+        done = done | ce | ste | ne | te
+        done_this_iter = np.logical_xor(prev_status, done)
+        if np.any(done_this_iter):
+            idx = np.nonzero(done_this_iter)[0]
+            # Later conditions override earlier ones, matching the precedence in
+            # the single-drone simulate(): stability < collision < complete < timeout.
+            statuses = np.full(idx.size, None, dtype=object)
+            statuses[ce[idx]] = ExitStatus.COLLISION
+            statuses[ste[idx]] = ExitStatus.OVER_SPEED
+            statuses[ne[idx]] = ExitStatus.COMPLETE
+            statuses[te[idx]] = ExitStatus.TIMEOUT
+            exit_status[idx] = statuses
+        exit_timesteps[done_this_iter] = step+1
+        if np.all(done):
+            break
+        running_idxs = np.nonzero(np.logical_not(done))[0]
+
+        time_array.append(time_array[-1] + t_step)
+        state[-1]['wind'] = wind_profile.update(time_array[-1], state[-1]['x'])
+        state.append(vehicles.step(state[-1], control[-1], t_step, idxs=running_idxs.flatten()))
+        flat.append(trajectories.update(time_array[-1]))
+        control.append(controller.update(time_array[-1], state[-1], flat[-1], idxs=running_idxs.flatten()))
+
+        statedot = vehicles.statedot(state[-1], control[-1], t_step, running_idxs.flatten())
+        imu_measurements.append(imu.measurement(state[-1], statedot, running_idxs.flatten(), with_noise=True))
+        imu_gt.append(imu.measurement(state[-1], statedot, running_idxs.flatten(), with_noise=False))
+        if camera is not None and time_array[-1][0] >= next_camera_time - 1e-9:
+            capture_camera(float(time_array[-1][0]), running_idxs)
+        step += 1
+        fps = len(running_idxs) / (time.time() - step_start_time)
+        total_time += time.time() - step_start_time
+        total_num_frames += len(running_idxs)
+        if print_fps:
+            print(f"FPS at step {step} = {fps}")
+    if print_fps:
+        print(f"Average FPS of batched simulation was {total_num_frames/total_time}")
+    time_array         = np.array(time_array, dtype=float)
+    state              = merge_dicts_batch(state)
+    control            = merge_dicts_batch(control)
+    flat               = merge_dicts_batch(flat)
+    if camera is not None:
+        camera_measurements = merge_batch_camera_measurements(camera_frames, camera_times, vehicles.num_drones)
+    return (time_array, state, control, flat, imu_measurements, imu_gt, exit_status, exit_timesteps,
+            camera_measurements)
+
+
+def merge_batch_camera_measurements(frames, times, num_drones):
+    """
+    Combine the list of K per-frame (measurement_dict, running_idx) tuples
+    returned by simulate_batch()'s internal capture loop into a single dict.
+
+    Each measurement dict is as produced by BatchedPinholeCamera.measurement().
+    A frame only covers the subset of drones that are still running, so every
+    output is placed back into a B-slot (B = num_drones). Drones that were not
+    running for a frame have zeroed/NaN entries in the fixed-size arrays and
+    None entries in the object arrays; the 'running' (K, B) bool array marks
+    which slots carry captured data for each frame.
+
+    For a single shared world the fixed-size outputs (visible_mask, projected,
+    depth, colors, descriptors) are stacked into (K, B, ...) numeric arrays
+    since the feature count N is constant. For per-drone worlds N can differ
+    between drones, so those outputs, and always the variable-size outputs
+    (keypoints, keypoint_depths, visible_features, visible_colors,
+    visible_descriptors), are stored as (K, B) object arrays holding per-drone
+    numpy arrays (None where that drone did not run or the camera opted out).
+    This mirrors the dict shape returned by merge_camera_measurements() for the
+    single-drone simulate(), with the extra leading batch dimension and the
+    ``running`` mask being the only batched additions.
+
+    Inputs:
+        frames, list of K (measurement_dict, running_idx) tuples from
+            simulate_batch()
+        times, list of K frame timestamps, s
+        num_drones, number of drones in the batch
+
+    Outputs:
+        camera_measurements, a dict with keys
+            time, (K,) array of frame timestamps
+            image, (K, B, H, W, 3) uint8 array of frames (divide by 255.0 to
+                recover floats in [0, 1])
+            running, (K, B) bool array marking which drones ran each frame
+            visible_mask, (K, B, N) bool array, or (K, B) object array of
+                per-drone (N_b,) bool arrays (per-drone worlds)
+            projected, (K, B, N, 2) array of pixels of all features (NaN for
+                drones that did not run), or (K, B) object array of per-drone
+                (N_b, 2) arrays (per-drone worlds)
+            depth, (K, B, N) array of camera-frame z of all features (NaN for
+                drones that did not run), or (K, B) object array (per-drone
+                worlds)
+            colors, (K, B, N, 3) RGB feature colors, or (K, B) object array,
+                or None when the camera's feature_output is 'descriptors'
+            descriptors, (K, B, N, D) array of generic feature descriptor
+                vectors, or (K, B) object array, or None when the camera's
+                feature_output is 'rgb' or the worlds carry no descriptor
+                vectors
+            keypoints, (K, B) object array of (M_b, 2) pixel arrays
+            keypoint_depths, (K, B) object array of (M_b,) depth arrays
+            visible_features, (K, B) object array of (M_b, 3) world positions
+            visible_colors, (K, B) object array of (M_b, 3) arrays, or None
+                when the camera's feature_output is 'descriptors'
+            visible_descriptors, (K, B) object array of (M_b, D) arrays, or
+                None when the camera's feature_output is 'rgb' or the worlds
+                carry no descriptor vectors
+    """
+    if not frames:
+        return None
+    K = len(frames)
+    first = frames[0][0]
+    per_drone = isinstance(first['visible_mask'], (list, tuple))
+    B = num_drones
+    H, W = first['image'].shape[1:3]
+
+    def any_present(field):
+        for meas, _ in frames:
+            val = meas.get(field)
+            if val is None:
+                continue
+            if per_drone:
+                if any(v is not None for v in val):
+                    return True
+            else:
+                return True
+        return False
+
+    has_colors = any_present('colors')
+    has_descriptors = any_present('descriptors')
+
+    image = np.zeros((K, B, H, W, 3), dtype=np.uint8)
+    running = np.zeros((K, B), dtype=bool)
+    keypoints = np.empty((K, B), dtype=object)
+    keypoint_depths = np.empty((K, B), dtype=object)
+    visible_features = np.empty((K, B), dtype=object)
+
+    if not per_drone:
+        N = first['visible_mask'].shape[1]
+        D = first['descriptors'].shape[2] if has_descriptors else None
+        visible_mask = np.zeros((K, B, N), dtype=bool)
+        projected = np.full((K, B, N, 2), np.nan, dtype=np.float64)
+        depth = np.full((K, B, N), np.nan, dtype=np.float64)
+        colors = np.full((K, B, N, 3), np.nan, dtype=np.float64) if has_colors else None
+        descriptors = np.full((K, B, N, D), np.nan, dtype=np.float64) if has_descriptors else None
+        visible_colors = np.empty((K, B), dtype=object) if has_colors else None
+        visible_descriptors = np.empty((K, B), dtype=object) if has_descriptors else None
+
+        for k, (meas, run) in enumerate(frames):
+            vm = meas['visible_mask'].cpu().numpy()
+            dp = meas['depth'].cpu().numpy()
+            image[k, run] = np.round(np.clip(meas['image'].cpu().numpy(), 0.0, 1.0)*255.0).astype(np.uint8)
+            running[k, run] = True
+            visible_mask[k, run] = vm
+            projected[k, run] = meas['projected'].cpu().numpy()
+            depth[k, run] = dp
+            if has_colors:
+                colors[k, run] = meas['colors'].cpu().numpy()
+            if has_descriptors:
+                descriptors[k, run] = meas['descriptors'].cpu().numpy()
+            for j, b in enumerate(run):
+                keypoints[k, b] = meas['keypoints'][j].cpu().numpy()
+                keypoint_depths[k, b] = meas['keypoint_depths'][j].cpu().numpy()
+                visible_features[k, b] = meas['visible_features'][j].cpu().numpy()
+                if has_colors:
+                    visible_colors[k, b] = meas['visible_colors'][j].cpu().numpy()
+                if has_descriptors:
+                    visible_descriptors[k, b] = meas['visible_descriptors'][j].cpu().numpy()
+    else:
+        visible_mask = np.empty((K, B), dtype=object)
+        projected = np.empty((K, B), dtype=object)
+        depth = np.empty((K, B), dtype=object)
+        colors = np.empty((K, B), dtype=object) if has_colors else None
+        descriptors = np.empty((K, B), dtype=object) if has_descriptors else None
+        visible_colors = np.empty((K, B), dtype=object) if has_colors else None
+        visible_descriptors = np.empty((K, B), dtype=object) if has_descriptors else None
+
+        for k, (meas, run) in enumerate(frames):
+            image[k, run] = np.round(np.clip(meas['image'].cpu().numpy(), 0.0, 1.0)*255.0).astype(np.uint8)
+            running[k, run] = True
+            for j, b in enumerate(run):
+                visible_mask[k, b] = meas['visible_mask'][j].cpu().numpy()
+                projected[k, b] = meas['projected'][j].cpu().numpy()
+                depth[k, b] = meas['depth'][j].cpu().numpy()
+                keypoints[k, b] = meas['keypoints'][j].cpu().numpy()
+                keypoint_depths[k, b] = meas['keypoint_depths'][j].cpu().numpy()
+                visible_features[k, b] = meas['visible_features'][j].cpu().numpy()
+                if has_colors:
+                    visible_colors[k, b] = meas['visible_colors'][j].cpu().numpy()
+                if has_descriptors:
+                    visible_descriptors[k, b] = meas['visible_descriptors'][j].cpu().numpy()
+                colors_c = meas['colors'][j]
+                if has_colors:
+                    colors[k, b] = colors_c.cpu().numpy() if colors_c is not None else None
+                desc_c = meas['descriptors'][j]
+                if has_descriptors:
+                    descriptors[k, b] = desc_c.cpu().numpy() if desc_c is not None else None
+
+    result = {
+        'time': np.array(times, dtype=float),
+        'image': image,
+        'running': running,
+        'visible_mask': visible_mask,
+        'projected': projected,
+        'depth': depth,
+        'colors': colors,
+        'descriptors': descriptors,
+        'keypoints': keypoints,
+        'keypoint_depths': keypoint_depths,
+        'visible_features': visible_features,
+        'visible_colors': visible_colors,
+        'visible_descriptors': visible_descriptors,
+    }
+    return result
+
+
+def merge_dicts_batch(dicts_in):
+    """
+    Concatenates contents of a list of N state dicts into a single dict by
+    prepending a new dimension of size N. This is more convenient for plotting
+    and analysis. Requires dicts to have consistent keys and have values that
+    are numpy arrays.
+    """
+    dict_out = {}
+    for k in dicts_in[0].keys():
+        dict_out[k] = []
+        for d in dicts_in:
+            dict_out[k].append(d[k].cpu().numpy())
+        dict_out[k] = np.array(dict_out[k])
+    return dict_out
+
+
+def traj_end_exit_batch(initial_state, trajectory, using_vio = False):
+    """
+    Returns a exit function. The exit function returns True if
+    the quadrotor is near hover at the end of the provided trajectory. If the
+    initial state is already at the end of the trajectory, the simulation will
+    run for at least one second before testing again.
+    """
+
+    xf = trajectory.update(np.inf)['x']
+    yawf = trajectory.update(np.inf)['yaw'].unsqueeze(-1)  # (num_drones, 1)
+    rotf = roma.rotvec_to_rotmat(yawf*torch.tensor([0,0,1], device=initial_state['x'].device).unsqueeze(0))
+    min_times = torch.all(torch.eq(initial_state['x'], xf), dim=-1).float()
+
+    def exit_fn(time, state):
+        cur_attitudes = roma.unitquat_to_rotmat(state['q'])
+        err_attitudes = rotf * torch.linalg.inv(cur_attitudes)
+        angle = torch.linalg.norm(roma.rotmat_to_rotvec(err_attitudes))
+        device = state['x'].device
+        # Success is reaching near-zero speed with near-zero position error.
+        if using_vio:
+            # set larger threshold for VIO due to noisy measurements
+            cond1 = torch.logical_and(torch.from_numpy(time).to(device) >= min_times, torch.linalg.norm(state['x'] - xf, dim=-1) < 1)
+            cond2 = torch.logical_and(torch.linalg.norm(state['v'], dim=-1) <= 1, angle <= 1)
+            cond = torch.logical_and(cond1, cond2).cpu().numpy()
+        else:
+            cond1 = torch.logical_and(torch.from_numpy(time).to(device) >= min_times, torch.linalg.norm(state['x'] - xf, dim=-1) < 0.02)
+            cond2 = torch.logical_and(torch.linalg.norm(state['v'], dim=-1) <= 0.02, angle <= 0.02)
+            cond = torch.logical_and(cond1, cond2).cpu().numpy()
+        return np.where(cond, True, False)
+    return exit_fn
+
+
+def time_exit_batch(times: np.ndarray, t_finals: np.ndarray):
+    """
+    Return True if the time exceeds t_final, otherwise None.
+    """
+    return np.where(times >= t_finals, True, False)
+
+
+def world_collision_tensors(world, device, dtype):
+    """
+    Build the torch tensors needed to evaluate collisions for ``world`` on a
+    device (typically a GPU). These are precomputed once per batched
+    simulation and reused every step so no numpy/CPU round-trip happens in the
+    hot loop; the collision arithmetic runs on the same device as the vehicle
+    states.
+
+    Inputs:
+        world, a single World object shared by all drones, or a list/tuple of
+            length B of Worlds (None for an empty world)
+        device, torch device
+        dtype, torch dtype matching the vehicle state tensors
+
+    Outputs:
+        lower, upper, torch tensors of the per-block min/max corners. Shape
+            (M, 3) for a single world, or (B, M_max, 3) for per-drone worlds.
+            Padded (invalid) blocks use +inf so they never win the minimum.
+        extents, torch tensor (6,) of the world bounds for a single world, or
+            (B, 6) for per-drone worlds where a None world gets effectively
+            unbounded bounds (never flagged as outside).
+    """
+    unbounded = [-1e9, 1e9, -1e9, 1e9, -1e9, 1e9]
+    if isinstance(world, (list, tuple)):
+        B = len(world)
+        block_counts = [(len(w.world.get('blocks', [])) if w is not None else 0) for w in world]
+        M_max = max(block_counts) if block_counts else 0
+        lower = torch.full((B, M_max, 3), float('inf'), device=device, dtype=dtype)
+        upper = torch.full((B, M_max, 3), float('inf'), device=device, dtype=dtype)
+        extents = torch.zeros((B, 6), device=device, dtype=dtype)
+        for b in range(B):
+            w = world[b]
+            if w is None:
+                extents[b] = torch.tensor(unbounded, device=device, dtype=dtype)
+                continue
+            bounds = w.world.get('bounds', {}).get('extents')
+            extents[b] = torch.tensor(bounds if bounds is not None else unbounded, device=device, dtype=dtype)
+            blocks = w.world.get('blocks', [])
+            if not blocks:
+                continue
+            r = torch.tensor(np.array([bl['extents'] for bl in blocks], dtype=np.float64),
+                             device=device, dtype=dtype)
+            lower[b, :len(blocks)] = r[:, 0::2]
+            upper[b, :len(blocks)] = r[:, 1::2]
+        return lower, upper, extents
+
+    blocks = world.world.get('blocks', [])
+    if blocks:
+        r = torch.tensor(np.array([b['extents'] for b in blocks], dtype=np.float64),
+                         device=device, dtype=dtype)
+        lower = r[:, 0::2]
+        upper = r[:, 1::2]
+    else:
+        lower = torch.empty((0, 3), device=device, dtype=dtype)
+        upper = torch.empty((0, 3), device=device, dtype=dtype)
+    bounds = world.world.get('bounds', {}).get('extents')
+    extents = torch.tensor(bounds if bounds is not None else unbounded, device=device, dtype=dtype)
+    return lower, upper, extents
+
+
+def _collisions_torch(x, lower, upper, extents, margin):
+    """
+    Vectorized collision check on the same device as ``x``. NaN positions
+    never collide (NaN < margin is False), matching the numpy implementation.
+
+    Inputs:
+        x, (B, 3) tensor of world positions
+        lower, (M, 3) or (B, M, 3) tensor of block min corners
+        upper, (M, 3) or (B, M, 3) tensor of block max corners
+        extents, (6,) or (B, 6) tensor of world bounds
+        margin, collision ball radius, m
+
+    Outputs:
+        collisions, (B,) bool tensor, True where the point is within
+            ``margin`` of a block or outside the world boundary
+    """
+    clipped = torch.clamp(x[:, None, :], lower, upper)                     # (B, M, 3)
+    dist = torch.linalg.norm(x[:, None, :] - clipped, dim=-1)              # (B, M)
+    if dist.shape[1] == 0:
+        closest = torch.full((x.shape[0],), float('inf'), dtype=x.dtype, device=x.device)
+    else:
+        closest = dist.min(dim=-1).values
+    block_collisions = closest < margin
+    lo = extents[..., 0::2]                                                # (3,) or (B, 3)
+    hi = extents[..., 1::2]
+    boundary_dist = torch.minimum(x - lo, hi - x).min(dim=-1).values       # (B,)
+    return block_collisions | (boundary_dist < 0)
+
+
+def safety_exit_batch(world, margin, state, flat, control, check_collisions=True, collision_tensors=None):
+    """
+    Return a (status, collision_status) tuple of bool arrays, one per drone.
+    ``status`` is True if the drone's stability safety conditions are
+    violated (excessive velocity or angular rate), ``collision_status`` is
+    True if the drone is within ``margin`` of a world block or outside the
+    world boundary. ``world`` may be a single World object (shared by all
+    drones) or a list/tuple of length B of Worlds (one per drone; a None entry
+    is an empty world that can never collide). With ``check_collisions=False``
+    the collision term is skipped.
+
+    The checks run in torch on the same device as ``state`` (no numpy/CPU
+    round-trip for the positions). ``collision_tensors`` optionally provides
+    precomputed (lower, upper, extents) tensors from world_collision_tensors()
+    that are reused across steps; when None they are built here on each call.
+    """
+    device = state['x'].device
+    status = (torch.abs(state['v']) > 20).any(dim=-1) | (torch.abs(state['w']) > 100).any(dim=-1)
+
+    collision_status = torch.zeros(state['x'].shape[0], dtype=torch.bool, device=device)
+    if check_collisions:
+        if collision_tensors is None:
+            collision_tensors = world_collision_tensors(world, device, state['x'].dtype)
+        lower, upper, extents = collision_tensors
+        collision_status = _collisions_torch(state['x'], lower, upper, extents, margin)
+    return status.cpu().numpy(), collision_status.cpu().numpy()

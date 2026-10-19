@@ -1,0 +1,9 @@
+﻿{
+    "plugin":  "DroneCoreBridge",
+    "interface_version":  1,
+    "platform":  "Win64",
+    "source_target":  "UE5",
+    "ue_build_validation":  "not_run_no_engine_installed",
+    "standalone_test_log":  "cpp/build/scheduler_test.log",
+    "dll_sha256":  "56ea3a8378bbf4848e83386254d59be193ec05f5caab52d0c71ba3d01ad479c8"
+}

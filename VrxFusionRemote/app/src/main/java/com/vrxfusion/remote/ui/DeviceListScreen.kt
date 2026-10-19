@@ -14,10 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,10 +27,10 @@ import com.vrxfusion.remote.MainViewModel
 import com.vrxfusion.remote.device.DeviceDescriptor
 import com.vrxfusion.remote.device.DeviceKind
 import com.vrxfusion.remote.device.DeviceState
-import com.vrxfusion.remote.protocol.Role
 import com.vrxfusion.remote.protocol.WsTransport
 import com.vrxfusion.remote.ui.components.OnlineDot
 import com.vrxfusion.remote.ui.theme.AccentBlue
+import com.vrxfusion.remote.ui.theme.BoundPurple
 import com.vrxfusion.remote.ui.theme.SurfaceCard
 import com.vrxfusion.remote.ui.theme.TextSecondary
 import com.vrxfusion.remote.ui.theme.WarnAmber
@@ -47,7 +43,9 @@ import com.vrxfusion.remote.ui.theme.WarnAmber
 @Composable
 fun DeviceListScreen(
     vm: MainViewModel,
-    onSelect: (DeviceDescriptor) -> Unit
+    onSelect: (DeviceDescriptor) -> Unit,
+    onOpenRotorPy: () -> Unit = {},
+    onOpenLandscape: () -> Unit = {}
 ) {
     val descriptors by vm.descriptors.collectAsState()
     val states by vm.states.collectAsState()
@@ -55,6 +53,12 @@ fun DeviceListScreen(
     val role by vm.role.collectAsState()
     val name by vm.userName.collectAsState()
     val url by vm.serverUrl.collectAsState()
+
+    // 未连接服务：全屏封面登录页（含连接中状态）
+    if (conn != WsTransport.ConnState.CONNECTED) {
+        LoginScreen(vm, onOpenRotorPy = onOpenRotorPy, onOpenLandscape = onOpenLandscape)
+        return
+    }
 
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
@@ -68,74 +72,35 @@ fun DeviceListScreen(
             ) {
                 Text("设备目录", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    when (conn) {
-                        WsTransport.ConnState.CONNECTED -> "已连接 · ${role.label} · $name"
-                        WsTransport.ConnState.CONNECTING -> "连接中…"
-                        else -> "未连接"
-                    },
+                    "已连接 · ${role.label} · $name",
                     fontSize = 12.sp,
-                    color = if (conn == WsTransport.ConnState.CONNECTED) AccentBlue else TextSecondary
+                    color = AccentBlue
                 )
             }
             Spacer(Modifier.height(10.dp))
         }
 
-        // ---- 登录/连接卡片（APP-002）----
+        // ---- 已连接状态条（点击断开）----
         item {
-            Column(
-                Modifier.fillMaxWidth().background(SurfaceCard, RoundedCornerShape(10.dp)).padding(14.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceCard, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("统一控制服务", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { vm.setServerUrl(it) },
-                    label = { Text("服务地址 ws://<服务IP>:8765/ws") },
-                    singleLine = true,
-                    enabled = conn == WsTransport.ConnState.DISCONNECTED,
-                    modifier = Modifier.fillMaxWidth()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OnlineDot(true)
+                    Spacer(Modifier.width(8.dp))
+                    Text(url, fontSize = 12.sp, color = TextSecondary)
+                }
+                Text(
+                    "断开",
+                    fontSize = 12.sp,
+                    color = AccentBlue,
+                    modifier = Modifier.clickable { vm.disconnect() }
                 )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { vm.setUserName(it) },
-                    label = { Text("用户名") },
-                    singleLine = true,
-                    enabled = conn == WsTransport.ConnState.DISCONNECTED,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Role.entries.forEach { r ->
-                        FilterChip(
-                            selected = role == r,
-                            onClick = { vm.setRole(r) },
-                            enabled = conn == WsTransport.ConnState.DISCONNECTED,
-                            label = { Text(r.label) }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = { if (conn == WsTransport.ConnState.DISCONNECTED) vm.connect() else vm.disconnect() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = if (conn == WsTransport.ConnState.DISCONNECTED)
-                        ButtonDefaults.buttonColors(containerColor = AccentBlue)
-                    else ButtonDefaults.buttonColors()
-                ) {
-                    Text(
-                        when (conn) {
-                            WsTransport.ConnState.DISCONNECTED -> "连接服务"
-                            WsTransport.ConnState.CONNECTING -> "连接中…"
-                            else -> "断开连接"
-                        }
-                    )
-                }
-                if (role == Role.OBSERVER) {
-                    Spacer(Modifier.height(6.dp))
-                    Text("观察员为只读角色：可查看状态，不能控制（服务端强制拒绝）",
-                        fontSize = 11.sp, color = WarnAmber)
-                }
             }
         }
 
@@ -157,6 +122,32 @@ fun DeviceListScreen(
                     }
                 }
             }
+        }
+
+        // ---- RotorPy 联调入口（合伙人A后端，HTTP 直联） ----
+        item {
+            Text("仿真联调", fontSize = 13.sp, color = TextSecondary,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceCard, RoundedCornerShape(10.dp))
+                    .clickable { onOpenRotorPy() }
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🚁", fontSize = 20.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("RotorPy 三维仿真联调", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("后端直联 · 三轴移动与偏航 · 单机", fontSize = 11.sp, color = TextSecondary)
+                    }
+                }
+                Text("进入 ›", fontSize = 13.sp, color = AccentBlue)
+            }
+            Spacer(Modifier.height(12.dp))
         }
     }
 }

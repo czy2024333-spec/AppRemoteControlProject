@@ -1,0 +1,13 @@
+{
+  "contract_version":"0.1",
+  "execution_implemented":false,
+  "required_common_fields":["cluster_id","cluster_session_id","request_id","sequence","sent_at_ms","ttl_ms","task_id","member_ids","contract_version","parameters"],
+  "endpoints":{
+    "/api/cluster/task-split":{"parameters_example":{"task_definition":{"type":"survey","region_id":"region-1"}}},
+    "/api/cluster/allocation":{"parameters_example":{"assignments":[{"device_id":"sim-drone-1","subtask_id":"subtask-1"}]}},
+    "/api/cluster/formation":{"parameters_example":{"shape":"line","spacing_m":2}},
+    "/api/cluster/cooperative-trajectory":{"parameters_example":{"trajectories":[{"device_id":"sim-drone-1","waypoints_m":[[0,0,1],[1,0,1]]}]}}
+  },
+  "response":{"http_status":501,"error_code":"COLLABORATION_NOT_IMPLEMENTED"},
+  "note":"仅校验公共字段和parameters为对象；算法专用参数例子是未来契约，不生成或执行任务。"
+}

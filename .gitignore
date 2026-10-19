@@ -1,0 +1,17 @@
+# 根级 .gitignore
+
+# 安装包与密钥（不入库，进交付目录/网盘）
+*.apk
+*.aab
+*.keystore
+!debug.keystore
+
+# 后端运行产物（可再生成）
+无人机统一后端_v0.7/results/
+无人机统一后端_v0.7/__pycache__/
+**/__pycache__/
+*.pyc
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db

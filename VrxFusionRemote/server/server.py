@@ -11,7 +11,8 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 # ---------------- 配置（CTL-006 预留：后续移入配置文件） ----------------
-HOST, PORT = "0.0.0.0", 8765
+# 端口：8765 已被合伙人A 的 v0.5.1 统一控制服务占用，本自建服务改用 8767
+HOST, PORT = "0.0.0.0", 8767
 LEASE_TTL_MS = 1000        # 连续输入租约有效期
 CMD_ACK_TIMEOUT_MS = 800   # 设备应答超时
 HEARTBEAT_TIMEOUT_S = 5    # 心跳超时判定断连

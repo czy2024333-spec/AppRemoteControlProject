@@ -1,0 +1,7 @@
+{
+  "status": "PENDING_CLIENT_SUPPLIED_HARDWARE",
+  "ring": {"model": null, "firmware": null, "sdk_version": null, "transport": null, "raw_data_format": null, "sample_rate_hz": null, "provider_module": null},
+  "voice": {"model": null, "sdk_version": null, "deployment": null, "license": null, "network_dependency": null, "confidence_available": null, "provider_module": null},
+  "compatibility_review": "NOT_COMPLETED",
+  "hardware_acceptance_complete": false
+}

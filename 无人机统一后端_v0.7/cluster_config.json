@@ -1,0 +1,99 @@
+{
+  "cluster_id": "sim-cluster-1",
+  "limits": {
+    "max_online": 3,
+    "max_controlled": 3,
+    "max_sensor_enabled": 3,
+    "lost_timeout_s": 0.5
+  },
+  "acceptance": {
+    "status": "DEVELOPMENT_BASELINE",
+    "formal_quantity_and_hardware_confirmed": false
+  },
+  "members": [
+    {
+      "device_id": "sim-drone-1",
+      "dynamics": {
+        "hover_position_m": [
+          0,
+          0,
+          1
+        ],
+        "mass_scale": 1.0,
+        "sim_rate_hz": 50
+      },
+      "control": {
+        "sensitivity": 1.0
+      },
+      "sensors": {
+        "enabled": true,
+        "rate_hz": 20,
+        "seed": 101,
+        "position_std_m": 0.02,
+        "velocity_std_m_s": 0.01
+      },
+      "state": {
+        "stream_hz": 25
+      }
+    },
+    {
+      "device_id": "sim-drone-2",
+      "dynamics": {
+        "hover_position_m": [
+          2,
+          0,
+          1
+        ],
+        "mass_scale": 1.1,
+        "sim_rate_hz": 50
+      },
+      "control": {
+        "sensitivity": 0.8
+      },
+      "sensors": {
+        "enabled": true,
+        "rate_hz": 20,
+        "seed": 102,
+        "position_std_m": 0.03,
+        "velocity_std_m_s": 0.015
+      },
+      "state": {
+        "stream_hz": 25
+      }
+    },
+    {
+      "device_id": "sim-drone-3",
+      "dynamics": {
+        "hover_position_m": [
+          0,
+          2,
+          1.5
+        ],
+        "mass_scale": 0.9,
+        "sim_rate_hz": 50
+      },
+      "control": {
+        "sensitivity": 0.9
+      },
+      "sensors": {
+        "enabled": true,
+        "rate_hz": 20,
+        "seed": 103,
+        "position_std_m": 0.01,
+        "velocity_std_m_s": 0.02
+      },
+      "state": {
+        "stream_hz": 25
+      }
+    }
+  ],
+  "groups": {
+    "alpha": [
+      "sim-drone-1",
+      "sim-drone-2"
+    ],
+    "beta": [
+      "sim-drone-3"
+    ]
+  }
+}

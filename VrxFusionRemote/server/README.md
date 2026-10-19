@@ -23,16 +23,16 @@
 # 1. 安装依赖（Python 3.10+）
 pip install -r requirements.txt
 
-# 2. 启动服务（默认 0.0.0.0:8765）
+# 2. 启动服务（默认 0.0.0.0:8767）
 python server.py
 
 # 3. 【临时测试适配】无 UE 时启动模拟设备（quality=iface_test，明确标识非正式模型）
 python mock_device.py
 
-# 4. APP 侧连接 ws://<本机IP>:8765/ws
+# 4. APP 侧连接 ws://<本机IP>:8767/ws
 ```
 
-健康检查：`curl http://127.0.0.1:8765/health`
+健康检查：`curl http://127.0.0.1:8767/health`
 
 ## 验收用例（自动化）
 
@@ -62,6 +62,6 @@ python test_acceptance.py
 
 ## UE/真实设备端接入方式（给 A/C）
 
-设备端以 WebSocket 客户端连接 `ws://<服务IP>:8765/ws`，首帧 hello：
+设备端以 WebSocket 客户端连接 `ws://<服务IP>:8767/ws`，首帧 hello：
 `{"type":"hello","payload":{"role":"device","client":"device","device_id":"uav-sim-01","kind":"rotary_sim","capabilities":[...]}}`
 此后按 ≥20Hz 发 `state`，收 `cmd` 并回 `ack`（corr 回填 cmd_id）。字段见协议文档第 5/6/7 节。

@@ -1,0 +1,126 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1. 官方 RotorPy 圆轨迹实验",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_official.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "2. 新核心：升降、停止、超时保护",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_core_demo.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "3. Python 核心单元测试",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": [
+        "test_lab",
+        "test_core",
+        "-v"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "4. C++ DLL 与 RotorPy 模型对照",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/verify_cpp_bridge.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "preLaunchTask": "构建并测试 C++ 核心",
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "5. 三维核心：轨迹与C++对照",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_3d_demo.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "preLaunchTask": "构建并测试 C++ 核心",
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "6. 三维 Python 测试",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": [
+        "test_core",
+        "test_core_3d",
+        "-v"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "7. 风场、冲量与恢复对照",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_disturbance_demo.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "preLaunchTask": "构建并测试 C++ 核心",
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    },
+    {
+      "name": "8. 环境与抗扰测试",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": [
+        "test_environment",
+        "-v"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONUTF8": "1",
+        "MPLBACKEND": "Agg"
+      }
+    }
+  ]
+}

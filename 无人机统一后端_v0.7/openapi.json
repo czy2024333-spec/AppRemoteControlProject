@@ -1,0 +1,1900 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "三来源硬件/SDK软件预接入（实物联调待完成）",
+    "version": "0.7.0",
+    "description": "甲方硬件及SDK尚未提供。协议软件测试不替代IN-006实物验收；起飞/降落/返航执行未支持，返回501。 新增boundary_recovery状态；边界恢复未满足时/api/resume返回409 BOUNDARY_RECOVERY_PENDING。控制协议版本仍为0.5。 实现0.7.0：单机协议0.5、集群协议0.6；新增鉴权健康接口、精确CORS白名单及X-Request-ID。"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8765"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/state": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/session": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "目标25Hz新步号状态SSE流，不代表手机画面刷新率",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/{source}/{command_id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "ring",
+                "voice"
+              ]
+            }
+          },
+          {
+            "name": "command_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/heartbeat": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/control": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "intent_sequence",
+                  "frame",
+                  "vx_m_s",
+                  "vy_m_s",
+                  "vz_m_s",
+                  "yaw_rate_rad_s"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "intent_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "frame": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading"
+                    ]
+                  },
+                  "vx_m_s": {
+                    "type": "number",
+                    "minimum": -0.5,
+                    "maximum": 0.5
+                  },
+                  "vy_m_s": {
+                    "type": "number",
+                    "minimum": -0.5,
+                    "maximum": 0.5
+                  },
+                  "vz_m_s": {
+                    "type": "number",
+                    "minimum": -0.5,
+                    "maximum": 0.5
+                  },
+                  "yaw_rate_rad_s": {
+                    "type": "number",
+                    "minimum": -0.5,
+                    "maximum": 0.5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/input": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "intent_sequence",
+                  "frame",
+                  "axes"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "intent_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "frame": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading"
+                    ]
+                  },
+                  "axes": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/switch": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "target_source",
+                  "user_initiated",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "target_source": {
+                    "type": "string",
+                    "enum": [
+                      "app",
+                      "ring",
+                      "voice"
+                    ]
+                  },
+                  "user_initiated": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/adaptive-switch": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "target_source",
+                  "user_initiated",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "target_source": {
+                    "type": "string",
+                    "enum": [
+                      "app",
+                      "ring",
+                      "voice"
+                    ]
+                  },
+                  "user_initiated": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/neutral": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "axes",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "axes": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    }
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/voice": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "intent_sequence",
+                  "command_id",
+                  "recognized",
+                  "confidence"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "intent_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "frame": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "forward",
+                      "backward",
+                      "left",
+                      "right",
+                      "up",
+                      "down",
+                      "turn_left",
+                      "turn_right"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number",
+                    "minimum": 100,
+                    "maximum": 5000
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "command_code": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "recognized": {
+                    "type": "boolean"
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "final": {
+                    "type": "boolean"
+                  }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "command_code"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "action"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          },
+          "501": {
+            "description": "语义已识别，但起飞/降落/返航任务尚未实现"
+          }
+        }
+      }
+    },
+    "/api/stop": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/protect": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/resume": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "neutral_confirmed",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "neutral_confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/cancel": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "target_source",
+                  "target_command_id",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "target_source": {
+                    "type": "string",
+                    "enum": [
+                      "app",
+                      "ring",
+                      "voice"
+                    ]
+                  },
+                  "target_command_id": {
+                    "type": "string"
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/disconnect": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "reason",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "APP_EXIT",
+                      "PERIPHERAL_DISCONNECTED",
+                      "NETWORK_INTERRUPTED",
+                      "INPUT_INVALID",
+                      "CONTROL_LOST"
+                    ]
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/config": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "config_version",
+                  "patch",
+                  "command_id"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "config_version": {
+                    "type": "integer"
+                  },
+                  "patch": {
+                    "type": "object",
+                    "description": "仅允许control_config.py中公开的白名单字段"
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/voice-result": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "intent_sequence",
+                  "command_id",
+                  "recognized",
+                  "confidence"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "intent_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "frame": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "forward",
+                      "backward",
+                      "left",
+                      "right",
+                      "up",
+                      "down",
+                      "turn_left",
+                      "turn_right"
+                    ]
+                  },
+                  "duration_ms": {
+                    "type": "number",
+                    "minimum": 100,
+                    "maximum": 5000
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "command_code": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "recognized": {
+                    "type": "boolean"
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "final": {
+                    "type": "boolean"
+                  }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "command_code"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "action"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          },
+          "501": {
+            "description": "语义已识别，但起飞/降落/返航任务尚未实现"
+          }
+        }
+      }
+    },
+    "/api/ring-event": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "event_sequence",
+                  "event_kind"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "event_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "event_kind": {
+                    "type": "string",
+                    "enum": [
+                      "axes",
+                      "button",
+                      "connection"
+                    ]
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "begin",
+                      "update",
+                      "end",
+                      "neutral"
+                    ]
+                  },
+                  "axes": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "items": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    }
+                  },
+                  "intent_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "frame": {
+                    "type": "string",
+                    "enum": [
+                      "world",
+                      "heading"
+                    ]
+                  },
+                  "button": {
+                    "type": "string"
+                  },
+                  "pressed": {
+                    "type": "boolean"
+                  },
+                  "connected": {
+                    "type": "boolean"
+                  },
+                  "command_id": {
+                    "type": "string"
+                  }
+                },
+                "description": "begin/update为连续轴事件，需intent_sequence/axes；neutral/end/button/connection需command_id。详细条件见IN接口补充说明。"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          },
+          "501": {
+            "description": "语义已识别，但起飞/降落/返航任务尚未实现"
+          }
+        }
+      }
+    },
+    "/api/confirm": {
+      "post": {
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "device_id",
+                  "session_id",
+                  "control_epoch",
+                  "command_sequence",
+                  "ttl_ms",
+                  "sent_at_ms",
+                  "command_id",
+                  "target_command_id",
+                  "confirmed"
+                ],
+                "properties": {
+                  "device_id": {
+                    "type": "string",
+                    "enum": [
+                      "sim-drone-1"
+                    ]
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "command_sequence": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "ttl_ms": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 500
+                  },
+                  "sent_at_ms": {
+                    "type": "number"
+                  },
+                  "command_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "target_command_id": {
+                    "type": "string"
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已应用/安排或返回幂等已有状态；语音完成需要查询",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝执行，见error_code"
+          },
+          "401": {
+            "description": "拒绝执行，见error_code"
+          },
+          "403": {
+            "description": "拒绝执行，见error_code"
+          },
+          "404": {
+            "description": "拒绝执行，见error_code"
+          },
+          "409": {
+            "description": "拒绝执行，见error_code"
+          },
+          "503": {
+            "description": "拒绝执行，见error_code"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "当前实现版本与运行线程健康状态，需Bearer鉴权",
+        "responses": {
+          "200": {
+            "description": "仿真运行健康，可仍处于保护模式"
+          },
+          "401": {
+            "description": "未鉴权"
+          },
+          "503": {
+            "description": "工作线程、成员或状态新鲜度异常"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

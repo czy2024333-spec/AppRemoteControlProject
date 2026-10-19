@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>无人机后端状态联调</title>
+<style>body{max-width:980px;margin:36px auto;padding:0 20px;font:16px/1.6 system-ui,sans-serif;color:#152238;background:#f6f8fb}h1{font-size:25px}label{display:block;margin:12px 0}input,select,button{font:inherit;padding:8px;border:1px solid #bdc9d8;border-radius:6px}input{width:min(92%,480px)}button{margin:8px 8px 8px 0;background:#fff;cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fff;padding:20px;border:1px solid #dce3ec;border-radius:8px}#message{font-weight:600}</style>
+<h1>无人机后端状态联调</h1>
+<p>用于读取状态和检查连接。请先启动后端并允许本页面来源；此页面不会创建控制会话或发送运动。</p>
+<label>服务地址 <input id="url" value="http://127.0.0.1:8765"></label>
+<label>来源Token <input id="token" type="password" placeholder="输入局域网联调Token" autocomplete="off"></label>
+<label>服务模式 <select id="mode"><option value="cluster">集群</option><option value="single">单机</option></select></label>
+<button id="health">检查健康状态</button><button id="once">读取状态</button><button id="stream">开始实时读取</button><button id="stop">停止读取</button>
+<p id="message">尚未连接</p><pre id="output">等待状态</pre>
+<script>
+// 采用fetch读取SSE，使Authorization请求头与原生APP一致；不在URL或日志中存储Token。
+const $=id=>document.getElementById(id); let controller=null;
+function base(){return $('url').value.trim().replace(/\/$/,'');}
+function headers(){return {Authorization:'Bearer '+$('token').value};}
+function stop(){if(controller)controller.abort();controller=null;}
+function show(value){$('output').textContent=JSON.stringify(value,null,2);}
+async function once(path){stop();try{const r=await fetch(base()+path,{headers:headers(),cache:'no-store'});const v=await r.json();show(v);$('message').textContent=r.ok?'连接成功':'请求失败 HTTP '+r.status;}catch(e){$('message').textContent='连接失败：'+e.message+'。请检查地址、跨域白名单和页面协议。';}}
+$('health').onclick=()=>once('/api/health');
+$('once').onclick=()=>once($('mode').value==='cluster'?'/api/cluster/state':'/api/state');
+$('stop').onclick=()=>{stop();$('message').textContent='已停止状态读取';};
+$('stream').onclick=async()=>{stop();const current=new AbortController();controller=current;let count=0,started=performance.now(),buffer='';try{
+const path=$('mode').value==='cluster'?'/api/cluster/events':'/api/events';
+const r=await fetch(base()+path,{headers:headers(),signal:current.signal,cache:'no-store'});
+if(!r.ok){show(await r.json());throw new Error('HTTP '+r.status);}
+const reader=r.body.getReader(),decoder=new TextDecoder();
+while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true}).replace(/\r\n/g,'\n');let i;
+while((i=buffer.indexOf('\n\n'))>=0){const event=buffer.slice(0,i);buffer=buffer.slice(i+2);const rows=event.split('\n').filter(x=>x.startsWith('data:')).map(x=>x.slice(5).trimStart());if(!rows.length)continue;
+show(JSON.parse(rows.join('\n')));count++;$('message').textContent='实时连接中，接收 '+(count/Math.max(.001,(performance.now()-started)/1000)).toFixed(1)+' 次/秒';}}
+if(controller===current)$('message').textContent='状态流已结束';
+}catch(e){if(e.name!=='AbortError'&&controller===current)$('message').textContent='读取失败：'+e.message;}
+finally{if(controller===current)controller=null;}};
+window.addEventListener('beforeunload',stop);
+</script></html>

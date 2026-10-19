@@ -9,7 +9,7 @@ import uuid
 
 import websockets
 
-SERVER = "ws://127.0.0.1:8765/ws"
+SERVER = "ws://127.0.0.1:8767/ws"
 DEVICE_ID = "uav-sim-01"
 HZ = 20
 DT = 1.0 / HZ

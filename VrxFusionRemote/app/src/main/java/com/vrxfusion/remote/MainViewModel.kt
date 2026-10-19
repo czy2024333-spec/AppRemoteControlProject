@@ -18,12 +18,60 @@ import com.vrxfusion.remote.protocol.WsTransport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 
 /**
  * 主 ViewModel：登录角色、服务连接、设备目录、控制会话（MVVM）。
  * 角色 B 首周交付：真机按钮→服务→设备链路；观察员不能控制（服务端强制 + UI 禁用）。
  */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
+    val diagnostics=com.vrxfusion.remote.diagnostics.FlightDiagnostics(app,viewModelScope)
+
+    // 地址保存在本机，Token仅保存在当前进程内，不明文持久化。
+    private val preferences = app.getSharedPreferences("backend_connection", 0)
+    private val hudStore = com.vrxfusion.remote.ui.HudPreferencesStore(app)
+    private val _hudPreferences = MutableStateFlow(hudStore.load())
+    val hudPreferences: StateFlow<com.vrxfusion.remote.ui.HudPreferences> = _hudPreferences
+    fun setHudPreferences(value: com.vrxfusion.remote.ui.HudPreferences) {
+        _hudPreferences.value = hudStore.save(value); hudRevision.value=hudStore.revision()
+    }
+    val hudRevision=MutableStateFlow(hudStore.revision())
+    val hudCheckpoint=MutableStateFlow(hudStore.hasCheckpoint())
+    val hudConfigMessage=MutableStateFlow("")
+    fun checkpointHud() { hudStore.checkpoint(); hudCheckpoint.value=true; hudConfigMessage.value="已保存当前显示配置为回退点" }
+    fun rollbackHud() { runCatching { _hudPreferences.value=hudStore.rollback() }
+        .onSuccess { hudRevision.value=hudStore.revision(); hudConfigMessage.value="已回退显示配置" }
+        .onFailure { hudConfigMessage.value="回退失败：${it.message}" } }
+    fun importHud(text: String) {
+        // 先完整校验再保存，失败不能破坏当前配置；导入前保留回退点。
+        runCatching { com.vrxfusion.remote.ui.HudConfigCodec.decode(text) }
+            .onSuccess { hudStore.checkpoint(); hudCheckpoint.value=true; setHudPreferences(it)
+                hudRevision.value=hudStore.revision(); hudConfigMessage.value="配置已校验并应用，原配置已保留为回退点" }
+            .onFailure { hudConfigMessage.value="导入失败：格式、版本或字段取值不合法，当前配置未改变" }
+    }
+    fun currentHudRevision()=hudStore.revision()
+    private val videoStore=com.vrxfusion.remote.video.VideoSettingsStore(app)
+    private val _videoSettings=MutableStateFlow(videoStore.load())
+    val videoSettings: StateFlow<com.vrxfusion.remote.video.VideoSettings> = _videoSettings
+    val videoCode=MutableStateFlow("") // 电脑画面访问码仅保留内存，不与飞控Token共用。
+    val videoSource=MutableStateFlow(com.vrxfusion.remote.video.VideoSource.NONE)
+    val videoGeneration=MutableStateFlow(0L)
+    val videoStatus=MutableStateFlow("未启用测试画面")
+    fun setVideoSettings(value: com.vrxfusion.remote.video.VideoSettings) { videoStore.save(value); _videoSettings.value=value }
+    fun startVideo() {
+        val source=_videoSettings.value.source
+        if (source==com.vrxfusion.remote.video.VideoSource.PC) {
+            com.vrxfusion.remote.video.videoConnectionIssue(_videoSettings.value.pcUrl,videoCode.value)?.let { videoStatus.value=it; return }
+        }
+        videoGeneration.value++; videoSource.value=source
+        videoStatus.value=if (source==com.vrxfusion.remote.video.VideoSource.NONE) "未启用测试画面" else "正在开启${source.label}"
+    }
+    fun stopVideo(reason: String="未启用测试画面") {
+        videoSource.value=com.vrxfusion.remote.video.VideoSource.NONE; videoGeneration.value++; videoStatus.value=reason
+    }
+    val rotorScope get() = viewModelScope
+    private var releaseJob: Job? = null
+    val clusterClient = com.vrxfusion.remote.rotorpy.ClusterMonitorClient()
 
     private val transport = WsTransport(viewModelScope)
     private val repository = DeviceRepository(viewModelScope, transport)
@@ -40,7 +88,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _userName = MutableStateFlow("")
     val userName: StateFlow<String> = _userName
 
-    private val _serverUrl = MutableStateFlow("ws://192.168.1.100:8765/ws")
+    // 自建 WebSocket 控制服务改到 8767（8765 已给合伙人A 的 v0.5.1 统一控制服务）
+    private val _serverUrl = MutableStateFlow("ws://10.90.247.120:8767/ws")
     val serverUrl: StateFlow<String> = _serverUrl
 
     /** 当前选中（待控制）设备 */
@@ -134,6 +183,57 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         session?.sendCommand(DeviceCommand.SimManage(action))
     }
 
+    // ---- RotorPy 联调（合伙人A后端，HTTP 直联） ----
+
+    // v0.5.1 三来源硬件适配：默认 8765 + APP 来源 Token
+    private val _rotorBaseUrl = MutableStateFlow(preferences.getString("url", "http://192.168.1.100:8765")!!)
+    val rotorBaseUrl: StateFlow<String> = _rotorBaseUrl
+
+    private val _rotorToken = MutableStateFlow("demo-app-token-2026")
+    val rotorToken: StateFlow<String> = _rotorToken
+
+    fun setRotorBaseUrl(url: String) { _rotorBaseUrl.value = url }
+    fun setRotorToken(token: String) { _rotorToken.value = token }
+
+    fun connectRotor() {
+        viewModelScope.launch {
+            releaseJob?.join()
+            val c = rotorClient()
+            c.baseUrl = _rotorBaseUrl.value
+            c.token = _rotorToken.value
+            preferences.edit().putString("url", _rotorBaseUrl.value.trim()).apply()
+            c.startPolling(viewModelScope)
+        }
+    }
+
+    fun connectCluster() {
+        preferences.edit().putString("url", _rotorBaseUrl.value.trim()).apply()
+        clusterClient.start(viewModelScope, _rotorBaseUrl.value, _rotorToken.value)
+    }
+
+    /** 离开控制区域/进入后台立即停流；后台上报由ViewModel执行，不依赖已销毁页面的协程。 */
+    fun pauseRotor() {
+        rotorPyClient?.stopPolling()
+        if (releaseJob?.isActive != true) {
+            releaseJob = viewModelScope.launch { rotorPyClient?.releaseAll() }
+        }
+    }
+
+    fun pauseAll() { pauseRotor(); clusterClient.stop(); stopVideo(); abandonSession() }
+
+    /** 客户端随 ViewModel 存活：v0.3 控制轮次(epoch)+轮次内序号由客户端绑定维护 */
+    private var rotorPyClient: com.vrxfusion.remote.rotorpy.RotorPyClient? = null
+    fun rotorClient(): com.vrxfusion.remote.rotorpy.RotorPyClient {
+        if (rotorPyClient == null) {
+            rotorPyClient = com.vrxfusion.remote.rotorpy.RotorPyClient(
+                baseUrl = _rotorBaseUrl.value,
+                token = _rotorToken.value
+            )
+            rotorPyClient!!.audit=diagnostics::event
+        }
+        return rotorPyClient!!
+    }
+
     private fun abandonSession() {
         session?.releaseAuthority()
         session = null
@@ -142,6 +242,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        diagnostics.close()
+        rotorPyClient?.stopPolling()
+        clusterClient.stop()
         repository.stop()
         super.onCleared()
     }

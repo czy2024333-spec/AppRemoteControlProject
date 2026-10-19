@@ -6,7 +6,7 @@ import uuid
 
 import websockets
 
-SERVER = "ws://127.0.0.1:8765/ws"
+SERVER = "ws://127.0.0.1:8767/ws"
 DEV = "uav-sim-01"
 
 

@@ -2,9 +2,20 @@ param(
     [ValidateSet('single','cluster')][string]$Mode = 'single',
     [ValidateRange(1,65535)][int]$Port = 8765,
     [string]$BackendRoot = (Join-Path $PSScriptRoot '..\无人机统一后端_v0.7'),
-    [string]$Python = 'C:\Users\24107\.workbuddy-ai\binaries\python\envs\rotorpy-day1\Scripts\python.exe'
+    [string]$Python = ''
 )
 $ErrorActionPreference = 'Stop'
+# 未指定解释器时按顺序探测本机已装RotorPy的环境，避免写死他人机器路径。
+if ([string]::IsNullOrWhiteSpace($Python)) {
+    $candidates = @(
+        (Join-Path $env:USERPROFILE '.workbuddy\binaries\python\envs\rotorpy\Scripts\python.exe'),
+        (Join-Path $env:USERPROFILE '.workbuddy-ai\binaries\python\envs\rotorpy-day1\Scripts\python.exe'),
+        'python'
+    )
+    foreach ($c in $candidates) { if (Test-Path -LiteralPath $c) { $Python = $c; break } }
+    if ([string]::IsNullOrWhiteSpace($Python)) { $Python = 'python' }
+}
+Write-Host "使用解释器：$Python"
 # 使用完整路径，避免在用户主目录执行时找不到入口；不会关闭占用端口的其他进程。
 $entry = Join-Path $BackendRoot 'run_backend.py'
 if (!(Test-Path -LiteralPath $entry)) { throw '找不到后端。请将v0.7后端解压到APP源码目录的同级，或传入 -BackendRoot。' }

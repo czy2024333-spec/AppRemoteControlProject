@@ -24,9 +24,12 @@
     <fields>;
 }
 
-# Paho MQTT
--keep class org.eclipse.paho.** { *; }
--dontwarn org.eclipse.paho.**
+# OkHttp / Okio（WebSocket 传输层）
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
 
 # R8 full mode 下对空规则类保持安静
 -dontnote kotlin.internal.PlatformImplementationsKt

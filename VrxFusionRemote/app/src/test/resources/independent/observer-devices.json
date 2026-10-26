@@ -1,0 +1,197 @@
+{
+  "ok": true,
+  "data": {
+    "contract_version": "1.0",
+    "cluster_id": "sim-cluster-1",
+    "target_revision": 1,
+    "self_device_id": null,
+    "devices": [
+      {
+        "device_id": "sim-drone-1",
+        "name": "sim-drone-1",
+        "kind": "MULTIROTOR",
+        "reality": "SIMULATION",
+        "integration_status": "CONNECTED",
+        "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+        "capabilities": {
+          "motion": true,
+          "motion_axes": [
+            "X",
+            "Y",
+            "Z",
+            "YAW"
+          ],
+          "motion_frames": [
+            "WORLD",
+            "HEADING"
+          ],
+          "default_motion_frame": "WORLD",
+          "normalized_input": true,
+          "velocity_setpoint": true,
+          "actions": [
+            "STOP",
+            "PROTECT",
+            "RESUME",
+            "HOVER"
+          ],
+          "takeoff": false,
+          "land": false,
+          "return_home": false,
+          "battery": false,
+          "gnss": false,
+          "local_position_velocity_measurement": true,
+          "autonomous_tasks": false,
+          "ue_video": false,
+          "hardware_ring_verified": false,
+          "hardware_voice_verified": false
+        },
+        "control_limits": {
+          "sensitivity": 1.0,
+          "deadzone": 0.08,
+          "max_horizontal_speed_m_s": 0.5,
+          "max_vertical_speed_m_s": 0.5,
+          "max_yaw_rate_rad_s": 0.5,
+          "input_ttl_ms": 500,
+          "sources_enabled": {
+            "app": true,
+            "ring": true,
+            "voice": true
+          }
+        },
+        "control_config_version": 1,
+        "routes": {
+          "state": "/api/v1/devices/sim-drone-1/state",
+          "events": "/api/v1/devices/sim-drone-1/events",
+          "legacy_control_prefix": "/api/devices/sim-drone-1",
+          "control_prefix": "/api/v1/devices/sim-drone-1"
+        },
+        "is_self": false,
+        "write_permitted": false
+      },
+      {
+        "device_id": "sim-drone-2",
+        "name": "sim-drone-2",
+        "kind": "MULTIROTOR",
+        "reality": "SIMULATION",
+        "integration_status": "CONNECTED",
+        "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+        "capabilities": {
+          "motion": true,
+          "motion_axes": [
+            "X",
+            "Y",
+            "Z",
+            "YAW"
+          ],
+          "motion_frames": [
+            "WORLD",
+            "HEADING"
+          ],
+          "default_motion_frame": "WORLD",
+          "normalized_input": true,
+          "velocity_setpoint": true,
+          "actions": [
+            "STOP",
+            "PROTECT",
+            "RESUME",
+            "HOVER"
+          ],
+          "takeoff": false,
+          "land": false,
+          "return_home": false,
+          "battery": false,
+          "gnss": false,
+          "local_position_velocity_measurement": true,
+          "autonomous_tasks": false,
+          "ue_video": false,
+          "hardware_ring_verified": false,
+          "hardware_voice_verified": false
+        },
+        "control_limits": {
+          "sensitivity": 0.8,
+          "deadzone": 0.08,
+          "max_horizontal_speed_m_s": 0.5,
+          "max_vertical_speed_m_s": 0.5,
+          "max_yaw_rate_rad_s": 0.5,
+          "input_ttl_ms": 500,
+          "sources_enabled": {
+            "app": true,
+            "ring": true,
+            "voice": true
+          }
+        },
+        "control_config_version": 1,
+        "routes": {
+          "state": "/api/v1/devices/sim-drone-2/state",
+          "events": "/api/v1/devices/sim-drone-2/events",
+          "legacy_control_prefix": "/api/devices/sim-drone-2",
+          "control_prefix": "/api/v1/devices/sim-drone-2"
+        },
+        "is_self": false,
+        "write_permitted": false
+      },
+      {
+        "device_id": "sim-drone-3",
+        "name": "sim-drone-3",
+        "kind": "MULTIROTOR",
+        "reality": "SIMULATION",
+        "integration_status": "CONNECTED",
+        "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+        "capabilities": {
+          "motion": true,
+          "motion_axes": [
+            "X",
+            "Y",
+            "Z",
+            "YAW"
+          ],
+          "motion_frames": [
+            "WORLD",
+            "HEADING"
+          ],
+          "default_motion_frame": "WORLD",
+          "normalized_input": true,
+          "velocity_setpoint": true,
+          "actions": [
+            "STOP",
+            "PROTECT",
+            "RESUME",
+            "HOVER"
+          ],
+          "takeoff": false,
+          "land": false,
+          "return_home": false,
+          "battery": false,
+          "gnss": false,
+          "local_position_velocity_measurement": true,
+          "autonomous_tasks": false,
+          "ue_video": false,
+          "hardware_ring_verified": false,
+          "hardware_voice_verified": false
+        },
+        "control_limits": {
+          "sensitivity": 0.9,
+          "deadzone": 0.08,
+          "max_horizontal_speed_m_s": 0.5,
+          "max_vertical_speed_m_s": 0.5,
+          "max_yaw_rate_rad_s": 0.5,
+          "input_ttl_ms": 500,
+          "sources_enabled": {
+            "app": true,
+            "ring": true,
+            "voice": true
+          }
+        },
+        "control_config_version": 1,
+        "routes": {
+          "state": "/api/v1/devices/sim-drone-3/state",
+          "events": "/api/v1/devices/sim-drone-3/events",
+          "legacy_control_prefix": "/api/devices/sim-drone-3",
+          "control_prefix": "/api/v1/devices/sim-drone-3"
+        },
+        "is_self": false,
+        "write_permitted": false
+      }
+    ]
+  }
+}

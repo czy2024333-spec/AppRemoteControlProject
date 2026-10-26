@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "data": {
+    "contract_version": "1.0",
+    "implementation_version": "0.8.0",
+    "deployment_mode": "UNIFIED",
+    "cluster_id": "sim-cluster-1",
+    "primary_device_id": "sim-drone-1",
+    "authentication": {
+      "mode": "DEVELOPMENT_SOURCE_TOKEN",
+      "authenticated_source": "APP",
+      "user_id": null,
+      "role": null,
+      "expires_at_unix_ms": null,
+      "formal_user_authentication": false
+    },
+    "protocols": {
+      "unified_read": "1.0",
+      "single_compat": "0.5",
+      "cluster_compat": "0.6",
+      "transport": [
+        "HTTP",
+        "SSE"
+      ]
+    },
+    "capabilities": {
+      "directory": true,
+      "unified_state": true,
+      "unified_receipts": true,
+      "single_and_cluster_same_address": true,
+      "unified_intent_write": false,
+      "cluster_control": true,
+      "ue_video": false,
+      "formal_user_roles": false,
+      "autonomous_tasks": false
+    },
+    "control_policy": {
+      "default_frame": "WORLD",
+      "supported_frames": [
+        "WORLD",
+        "HEADING"
+      ],
+      "state_stream_target_hz": 25,
+      "axes_order": [
+        "X",
+        "Y",
+        "Z",
+        "YAW"
+      ],
+      "axes_unit": "NORMALIZED",
+      "input_ttl_max_ms": 500,
+      "source_switch": "USER_SWITCH_NEUTRAL",
+      "observe_grants_control": false
+    },
+    "routes": {
+      "devices": "/api/v1/devices",
+      "state": "/api/v1/state",
+      "events": "/api/v1/events",
+      "single_compat_prefix": "/api",
+      "cluster_compat_prefix": "/api/cluster",
+      "member_prefix": "/api/devices"
+    },
+    "limits": {
+      "max_online": 3,
+      "max_controlled": 3,
+      "max_sensor_enabled": 3,
+      "lost_timeout_s": 0.5
+    }
+  },
+  "request_id": "6e19469f9d554fa9bf6b703a3d4c5af9"
+}

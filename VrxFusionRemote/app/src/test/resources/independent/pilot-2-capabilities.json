@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "data": {
+    "contract_version": "1.0",
+    "implementation_version": "0.9.0",
+    "deployment_mode": "INDEPENDENT",
+    "cluster_id": "sim-cluster-1",
+    "authentication": {
+      "mode": "DEVELOPMENT_DEVICE_BOUND_TOKEN",
+      "client_id": "pilot-2",
+      "role": "CONTROLLER",
+      "device_id": "sim-drone-2",
+      "source": "app"
+    },
+    "protocols": {
+      "unified_read": "1.0",
+      "device_control": "0.5",
+      "transport": [
+        "HTTP",
+        "SSE"
+      ]
+    },
+    "self_device_id": "sim-drone-2",
+    "writable_device_ids": [
+      "sim-drone-2"
+    ],
+    "capabilities": {
+      "independent_control": true,
+      "cluster_control": false,
+      "unified_intent_write": false,
+      "device_bound_legacy_write": true,
+      "directory": true,
+      "unified_state": true,
+      "unified_receipts": true,
+      "ue_video": false,
+      "formal_user_roles": false
+    },
+    "control_policy": {
+      "default_frame": "WORLD",
+      "axes_order": [
+        "X",
+        "Y",
+        "Z",
+        "YAW"
+      ],
+      "input_ttl_max_ms": 500,
+      "state_stream_target_hz": 25,
+      "observe_grants_control": false,
+      "source_switch": "USER_SWITCH_NEUTRAL",
+      "one_session_per_device_source": true,
+      "session_replacement": "USER_ACTION_STOPS_ONLY_THIS_DEVICE"
+    },
+    "routes": {
+      "devices": "/api/v1/devices",
+      "state": "/api/v1/state",
+      "events": "/api/v1/events",
+      "control_prefix": "/api/v1/devices/{device_id}"
+    }
+  }
+}

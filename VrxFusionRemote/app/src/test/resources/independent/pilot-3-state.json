@@ -1,0 +1,372 @@
+{
+  "ok": true,
+  "data": {
+    "contract_version": "1.0",
+    "implementation_version": "0.9.0",
+    "cluster_id": "sim-cluster-1",
+    "boot_id": "9643836c817d4aa7bf66bfb9fe29f2a5",
+    "target_revision": 1,
+    "server_time_unix_ms": 1792485966240.8098,
+    "selection": null,
+    "groups": {
+      "alpha": [
+        "sim-drone-1",
+        "sim-drone-2"
+      ],
+      "beta": [
+        "sim-drone-3"
+      ]
+    },
+    "members": [
+      {
+        "contract_version": "1.0",
+        "device_id": "sim-drone-1",
+        "boot_id": "6e8a2312a69c49958db8a11b45bd23ea",
+        "sequence": 1,
+        "server_time_unix_ms": 1792485966219.5242,
+        "simulation_time_s": 0.02,
+        "state_age_ms": 21.116299998539034,
+        "online": true,
+        "mode": "HOLD",
+        "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+        "position": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 1.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "unit": "m"
+        },
+        "velocity": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "unit": "m/s"
+        },
+        "attitude": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "representation": "QUATERNION_XYZW_BODY_TO_WORLD"
+        },
+        "angular_velocity": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "reference_frame": "BODY",
+          "unit": "rad/s"
+        },
+        "battery": {
+          "value": null,
+          "source": "UNKNOWN",
+          "validity": "NOT_CONNECTED",
+          "unit": "%"
+        },
+        "gnss": {
+          "value": null,
+          "source": "UNKNOWN",
+          "validity": "NOT_CONNECTED"
+        },
+        "sensors": {
+          "local_position_velocity": {
+            "value": {
+              "kind": "SIMULATED_LOCAL_POSITION_VELOCITY",
+              "quality": "SIMULATED",
+              "sequence": 1,
+              "simulation_time_s": 0.0,
+              "position_m": [
+                -0.015803049999260292,
+                -0.04069250963663745,
+                1.0120660349384953
+              ],
+              "velocity_m_s": [
+                0.0074429452987991186,
+                -0.0030968679986627134,
+                0.0036732137294554026
+              ],
+              "position_std_m": 0.02,
+              "velocity_std_m_s": 0.01
+            },
+            "source": "SIM_MEASUREMENT",
+            "validity": "VALID"
+          }
+        },
+        "task": {
+          "task_id": null,
+          "status": "NOT_SUPPORTED"
+        },
+        "alarms": [],
+        "control": {
+          "source": null,
+          "selected_source": null,
+          "pending_source": null,
+          "control_epoch": "982f4fc19c9341d49f38d9598ee7f70e",
+          "phase": "OBSERVING",
+          "has_control": null,
+          "lease_required": true,
+          "write_permitted": false
+        },
+        "video": {
+          "source": "UE",
+          "status": "NOT_CONNECTED"
+        },
+        "is_self": false
+      },
+      {
+        "contract_version": "1.0",
+        "device_id": "sim-drone-2",
+        "boot_id": "2339c761fd8041d0b2f32ab952ac4a20",
+        "sequence": 1,
+        "server_time_unix_ms": 1792485966227.8972,
+        "simulation_time_s": 0.02,
+        "state_age_ms": 12.839800001529511,
+        "online": true,
+        "mode": "HOLD",
+        "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+        "position": {
+          "value": {
+            "x": 2.0,
+            "y": 0.0,
+            "z": 1.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "unit": "m"
+        },
+        "velocity": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "unit": "m/s"
+        },
+        "attitude": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "representation": "QUATERNION_XYZW_BODY_TO_WORLD"
+        },
+        "angular_velocity": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "reference_frame": "BODY",
+          "unit": "rad/s"
+        },
+        "battery": {
+          "value": null,
+          "source": "UNKNOWN",
+          "validity": "NOT_CONNECTED",
+          "unit": "%"
+        },
+        "gnss": {
+          "value": null,
+          "source": "UNKNOWN",
+          "validity": "NOT_CONNECTED"
+        },
+        "sensors": {
+          "local_position_velocity": {
+            "value": {
+              "kind": "SIMULATED_LOCAL_POSITION_VELOCITY",
+              "quality": "SIMULATED",
+              "sequence": 1,
+              "simulation_time_s": 0.0,
+              "position_m": [
+                2.0187718819477145,
+                0.06492976076857998,
+                1.0286662167608713
+              ],
+              "velocity_m_s": [
+                -0.01620348634536972,
+                -0.008905126910634397,
+                0.012918285835036033
+              ],
+              "position_std_m": 0.03,
+              "velocity_std_m_s": 0.015
+            },
+            "source": "SIM_MEASUREMENT",
+            "validity": "VALID"
+          }
+        },
+        "task": {
+          "task_id": null,
+          "status": "NOT_SUPPORTED"
+        },
+        "alarms": [],
+        "control": {
+          "source": null,
+          "selected_source": null,
+          "pending_source": null,
+          "control_epoch": "0d227b6306cb48b59503932a79af2537",
+          "phase": "OBSERVING",
+          "has_control": null,
+          "lease_required": true,
+          "write_permitted": false
+        },
+        "video": {
+          "source": "UE",
+          "status": "NOT_CONNECTED"
+        },
+        "is_self": false
+      },
+      {
+        "contract_version": "1.0",
+        "device_id": "sim-drone-3",
+        "boot_id": "bb9bc2052eee466bb0f6b5056cfcd169",
+        "sequence": 1,
+        "server_time_unix_ms": 1792485966236.21,
+        "simulation_time_s": 0.02,
+        "state_age_ms": 4.6196000002964865,
+        "online": true,
+        "mode": "HOLD",
+        "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+        "position": {
+          "value": {
+            "x": 0.0,
+            "y": 2.0,
+            "z": 1.5
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "unit": "m"
+        },
+        "velocity": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "unit": "m/s"
+        },
+        "attitude": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 1.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "representation": "QUATERNION_XYZW_BODY_TO_WORLD"
+        },
+        "angular_velocity": {
+          "value": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "source": "SIM_TRUTH",
+          "validity": "VALID",
+          "reference_frame": "BODY",
+          "unit": "rad/s"
+        },
+        "battery": {
+          "value": null,
+          "source": "UNKNOWN",
+          "validity": "NOT_CONNECTED",
+          "unit": "%"
+        },
+        "gnss": {
+          "value": null,
+          "source": "UNKNOWN",
+          "validity": "NOT_CONNECTED"
+        },
+        "sensors": {
+          "local_position_velocity": {
+            "value": {
+              "kind": "SIMULATED_LOCAL_POSITION_VELOCITY",
+              "quality": "SIMULATED",
+              "sequence": 1,
+              "simulation_time_s": 0.0,
+              "position_m": [
+                0.011033480291669078,
+                1.9872021587602489,
+                1.506481524460098
+              ],
+              "velocity_m_s": [
+                -0.02399160885386857,
+                0.021436013962311665,
+                -0.03112143069821763
+              ],
+              "position_std_m": 0.01,
+              "velocity_std_m_s": 0.02
+            },
+            "source": "SIM_MEASUREMENT",
+            "validity": "VALID"
+          }
+        },
+        "task": {
+          "task_id": null,
+          "status": "NOT_SUPPORTED"
+        },
+        "alarms": [],
+        "control": {
+          "source": null,
+          "selected_source": null,
+          "pending_source": null,
+          "control_epoch": "c9667a913b894085953d07bb3f8356fd",
+          "phase": "OBSERVING",
+          "has_control": null,
+          "lease_required": true,
+          "write_permitted": true
+        },
+        "video": {
+          "source": "UE",
+          "status": "NOT_CONNECTED"
+        },
+        "is_self": true
+      }
+    ],
+    "summary": {
+      "registered_count": 3,
+      "online_count": 3,
+      "selected_count": 0,
+      "active_count": 0,
+      "sensor_enabled_count": 3
+    },
+    "deployment_mode": "INDEPENDENT",
+    "self_device_id": "sim-drone-3",
+    "viewer_role": "CONTROLLER",
+    "audit": {
+      "healthy": true,
+      "failure": null,
+      "pending": 0,
+      "capacity": 8192,
+      "accepted": 3,
+      "written": 3,
+      "rejected": 0,
+      "failed_events_retained": 0,
+      "flush_interval_ms": 100,
+      "durability": "BUFFERED_NO_FSYNC"
+    }
+  }
+}

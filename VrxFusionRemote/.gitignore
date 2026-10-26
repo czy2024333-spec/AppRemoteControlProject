@@ -13,7 +13,6 @@ local.properties
 *.apk
 *.aab
 *.keystore
-!debug.keystore
 
 # Android Studio 本地配置
 .idea/
@@ -21,3 +20,24 @@ local.properties
 
 # Kotlin 构建缓存
 .kotlin/
+
+# 服务端运行产物
+server/service.db
+server/logs/
+server/__pycache__/
+
+# 私钥、凭据及本机运行数据不得提交
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+.deps/
+*.log
+*.db

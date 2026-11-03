@@ -1,0 +1,8 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "",
+  "Category": "Simulation",
+  "Description": "Offline drone core integration sandbox. Requires UE5; engine build not yet validated.",
+  "Modules": [{"Name": "DroneCoreSandbox", "Type": "Runtime", "LoadingPhase": "Default"}],
+  "Plugins": [{"Name": "DroneCoreBridge", "Enabled": true}]
+}

@@ -1,0 +1,2 @@
+# 首次安装的固定RotorPy版本；完整依赖版本由成功运行后的requirements-lock.txt记录。
+rotorpy==3.0.0

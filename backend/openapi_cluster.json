@@ -1,0 +1,606 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "多机集群开发接口",
+    "version": "0.7.0",
+    "description": "具体动作字段、成员控制路径及非原子分发语义见集群接口与前端对接.md 实现0.7.0：单机协议0.5、集群协议0.6；新增鉴权健康接口、精确CORS白名单及X-Request-ID。"
+  },
+  "security": [
+    {
+      "sourceToken": []
+    }
+  ],
+  "paths": {
+    "/api/cluster/register": {
+      "post": {
+        "summary": "register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/unregister": {
+      "post": {
+        "summary": "unregister",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/groups": {
+      "post": {
+        "summary": "groups",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/join": {
+      "post": {
+        "summary": "join",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/leave": {
+      "post": {
+        "summary": "leave",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/member-link": {
+      "post": {
+        "summary": "member-link",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/select": {
+      "post": {
+        "summary": "select",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/dispatch": {
+      "post": {
+        "summary": "dispatch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/task-split": {
+      "post": {
+        "summary": "task-split",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/allocation": {
+      "post": {
+        "summary": "allocation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/formation": {
+      "post": {
+        "summary": "formation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/cooperative-trajectory": {
+      "post": {
+        "summary": "cooperative-trajectory",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClusterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok/data；dispatch须检查逐成员results"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "409": {
+            "description": "过期、冲突、失联或旧选择"
+          },
+          "501": {
+            "description": "协同算法未实现"
+          }
+        }
+      }
+    },
+    "/api/cluster/session": {
+      "post": {
+        "summary": "建立集群来源会话",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "cluster_session_id"
+          }
+        }
+      }
+    },
+    "/api/cluster/state": {
+      "get": {
+        "summary": "状态读取或SSE",
+        "responses": {
+          "200": {
+            "description": "GET为ok/data，SSE为直接状态对象"
+          }
+        }
+      }
+    },
+    "/api/cluster/events": {
+      "get": {
+        "summary": "状态读取或SSE",
+        "responses": {
+          "200": {
+            "description": "GET为ok/data，SSE为直接状态对象"
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/state": {
+      "get": {
+        "summary": "状态读取或SSE",
+        "responses": {
+          "200": {
+            "description": "GET为ok/data，SSE为直接状态对象"
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/devices/{device_id}/events": {
+      "get": {
+        "summary": "状态读取或SSE",
+        "responses": {
+          "200": {
+            "description": "GET为ok/data，SSE为直接状态对象"
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "当前实现版本与运行线程健康状态，需Bearer鉴权",
+        "responses": {
+          "200": {
+            "description": "仿真运行健康，可仍处于保护模式"
+          },
+          "401": {
+            "description": "未鉴权"
+          },
+          "503": {
+            "description": "工作线程、成员或状态新鲜度异常"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sourceToken": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "ClusterRequest": {
+        "type": "object",
+        "required": [
+          "cluster_id",
+          "cluster_session_id",
+          "request_id",
+          "sequence",
+          "sent_at_ms",
+          "ttl_ms"
+        ],
+        "properties": {
+          "cluster_id": {
+            "type": "string"
+          },
+          "cluster_session_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "selection_id": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "group_id": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "contract_version": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sent_at_ms": {
+            "type": "number"
+          },
+          "ttl_ms": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 500
+          },
+          "user_initiated": {
+            "type": "boolean"
+          },
+          "takeover": {
+            "type": "boolean"
+          },
+          "target_kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "group",
+              "cluster"
+            ]
+          },
+          "member_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "member": {
+            "type": "object"
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "commands": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "device_id",
+                "path",
+                "body"
+              ],
+              "properties": {
+                "device_id": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

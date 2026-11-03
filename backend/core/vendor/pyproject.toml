@@ -1,0 +1,103 @@
+[project]
+name = "rotorpy"
+version = "3.0.0"
+description = "A multirotor simulator with aerodynamics for education and research."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE.md" }
+keywords = ["drone", "uav", "quadrotor", "multirotor", "aerodynamics", "simulation", "controls", "robotics", "estimation"]  # Optional
+authors = [
+    { name = "Spencer Folk", email = "spencer.folk@gmail.com" } 
+]
+maintainers = [
+    { name = "Spencer Folk", email = "spencer.folk@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = [
+    'pyyaml',
+    'cvxopt',
+    'matplotlib',
+    'numpy>=1.24',
+    'scipy',
+    'pandas',
+    'tqdm',
+    'gymnasium',
+    'timed_count',    # Only for ardupilot sitl example
+]
+
+[project.optional-dependencies]
+batched = [
+    'torch>=1.11.0',
+    'torchdiffeq',
+    'roma',
+    'opt-einsum',
+]
+learning = [
+    'stable_baselines3',
+    'tensorboard',
+]
+testing = [
+    'pytest',
+    'filterpy == 1.4.5',
+    'stable_baselines3',
+    'foundation-policy==1.0.1',
+    'pymavlink',
+    'torch>=1.11.0',
+    'torchdiffeq',
+    'roma',
+    'opt-einsum',
+]
+filter = [
+    'filterpy == 1.4.5',
+]
+raptor = [
+    'stable_baselines3',
+    'tensorboard',
+    'foundation-policy==1.0.1',
+]
+px4 = [
+    'pymavlink',
+]
+all = [
+    "torch>=1.11.0",
+    "torchdiffeq",
+    "roma",
+    "opt-einsum",
+    "stable_baselines3",
+    "tensorboard",
+    "pytest",
+    "filterpy == 1.4.5",
+    "foundation-policy==1.0.1",
+    "pymavlink",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/spencerfolk/rotorpy"
+"Bug Reports" = "https://github.com/spencerfolk/rotorpy/issues"
+"Source" = "https://github.com/spencerfolk/rotorpy"
+
+
+[build-system]
+requires = ["setuptools>=44.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["rotorpy", "rotorpy.*"]
+[tool.setuptools]
+
+[tool.pytest.ini_options]
+addopts = '-m "not run_examples"'
+markers = [
+    "run_examples: full end-to-end execution of just the examples in ./examples/",
+]
+filterwarnings = [
+    "ignore:Matplotlib is currently using agg.*:UserWarning",
+    "ignore:Animation was deleted without rendering anything.*:UserWarning",
+]

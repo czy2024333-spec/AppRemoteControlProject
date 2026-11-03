@@ -1,0 +1,946 @@
+{
+  "source_delivery": "无人机独立操控后端_v0.9",
+  "zip_sha256": "2e8beb9a890b83a62b9436c6d0856fe9b2a5144d9eca87509ddc752bcb08a23f",
+  "prepared_date": "2026-11-03",
+  "note": "源交付清单逐项验证。README 与 UE 说明仅更新仓库导航；Python/C++等业务源码保持原字节。运行日志、二进制与生成页不提交。",
+  "included": [
+    {
+      "source": ".vscode/launch.json",
+      "path": "backend/.vscode/launch.json",
+      "source_sha256": "4cb371b11303b8be3f6433ea83772bdd79ff08c625b9978b25037619fa4c729b"
+    },
+    {
+      "source": ".vscode/settings.json",
+      "path": "backend/.vscode/settings.json",
+      "source_sha256": "f5adf7b29486e51ede3e1b13c71f860bb565f8bd92102a1020864e1ae44af52f"
+    },
+    {
+      "source": "acceptance_report.py",
+      "path": "backend/acceptance_report.py",
+      "source_sha256": "34c7cd98f035e601b33e59cbe2e213480637bd23fc9422dc93c7a3a5e03ad374"
+    },
+    {
+      "source": "app_server.py",
+      "path": "backend/app_server.py",
+      "source_sha256": "866513a637df1200155d8ddf35ee790615a03c726502238fb2591932f8199787"
+    },
+    {
+      "source": "async_audit.py",
+      "path": "backend/async_audit.py",
+      "source_sha256": "06c469064b6f6cb3bad7b903aefde574f4e9373d29decf189f99adae636df1cd"
+    },
+    {
+      "source": "build_unified_contract.py",
+      "path": "backend/build_unified_contract.py",
+      "source_sha256": "73a9632c5756ea5fdd311261170e4596b55c485af9fb4de76866c0c09f025d16"
+    },
+    {
+      "source": "client.py",
+      "path": "backend/client.py",
+      "source_sha256": "4dfb4e35be0215e1da6f4b2650694c9ceaf2e90534d0a5d38989bf8c1377b824"
+    },
+    {
+      "source": "cluster_client.py",
+      "path": "backend/cluster_client.py",
+      "source_sha256": "85b53f46156f11befe319edbf3da1323f1c4e723bfb8f016deefedfce82a56f7"
+    },
+    {
+      "source": "cluster_config.json",
+      "path": "backend/cluster_config.json",
+      "source_sha256": "fe2e185b356c63294c9bc413b0fa571a6b412146ec7f5b33b513faf7263b139b"
+    },
+    {
+      "source": "cluster_manager.py",
+      "path": "backend/cluster_manager.py",
+      "source_sha256": "cceae092c43ba7aeeaeaa6f02e3f6d4ae5414df6c85ccc39ea8c526c1cf71a59"
+    },
+    {
+      "source": "cluster_member.py",
+      "path": "backend/cluster_member.py",
+      "source_sha256": "0449f48beb70d4e95cc1dc78e344201a91a0036f0a5024e281f25f1b7d6145a2"
+    },
+    {
+      "source": "cluster_server.py",
+      "path": "backend/cluster_server.py",
+      "source_sha256": "2a038e3d16ac5233830cc7fb30b596e8a109baa75b3b2cb2431b1d304a517eef"
+    },
+    {
+      "source": "CLU要求与验证.md",
+      "path": "backend/CLU要求与验证.md",
+      "source_sha256": "e1e44da65dae73a4fb726c89fff44edc34145edd22f2b0156fa4ff345dc284a2"
+    },
+    {
+      "source": "collaboration_contracts.json",
+      "path": "backend/collaboration_contracts.json",
+      "source_sha256": "832bcec3930f900f14674ad2aaab37959ef78918f61288c4827c3f33afc76d75"
+    },
+    {
+      "source": "config_validation.py",
+      "path": "backend/config_validation.py",
+      "source_sha256": "7230b1b74c6801c8aab59cebf6bcac57b3473db346b870f1c3c0af1e4568e950"
+    },
+    {
+      "source": "control_config.json",
+      "path": "backend/control_config.json",
+      "source_sha256": "38a95979c07d6a5443d1680a6e63fa62a1c63ed0cbfd7fa8ed22c96b2ca6c789"
+    },
+    {
+      "source": "control_config.py",
+      "path": "backend/control_config.py",
+      "source_sha256": "7142aaf0df59e027dfffbc6a7984b461d4b6f917a33af7ce428d606422f60b2a"
+    },
+    {
+      "source": "core/.vscode/extensions.json",
+      "path": "backend/core/.vscode/extensions.json",
+      "source_sha256": "d4db43f30de78ba908ea54e92f469f59cb1e5e26ab96d7eebff48e3452b3a3ea"
+    },
+    {
+      "source": "core/.vscode/launch.json",
+      "path": "backend/core/.vscode/launch.json",
+      "source_sha256": "1ce9ca5693977e56fa586b7a7188498ba9348a8a451f07929c18f19aaca6d852"
+    },
+    {
+      "source": "core/.vscode/settings.json",
+      "path": "backend/core/.vscode/settings.json",
+      "source_sha256": "2b2d34848f4a22812b223c8bdc3b1a935e98588c393da92eec952523757a5a83"
+    },
+    {
+      "source": "core/.vscode/tasks.json",
+      "path": "backend/core/.vscode/tasks.json",
+      "source_sha256": "62e1182c40f795d7926bac2dbd2dc51cff2a4251c2390ce0ac4db6d3aec7fb55"
+    },
+    {
+      "source": "core/build_delivery.py",
+      "path": "backend/core/build_delivery.py",
+      "source_sha256": "9c79b778d5f3eafeed6731edd68b5dd987731dc23b35adeacdd0ea3462e90994"
+    },
+    {
+      "source": "core/CORE_INTERFACE.md",
+      "path": "backend/core/CORE_INTERFACE.md",
+      "source_sha256": "746614ef81d797b7ccc409bdba7968324ed2cd21f36e4be9e7957965cf726255"
+    },
+    {
+      "source": "core/cpp/build_windows.ps1",
+      "path": "backend/core/cpp/build_windows.ps1",
+      "source_sha256": "87afd15c4bfca08adea7f5223a66718f7a18883a7a052b818f26ad5f8886accf"
+    },
+    {
+      "source": "core/cpp/CMakeLists.txt",
+      "path": "backend/core/cpp/CMakeLists.txt",
+      "source_sha256": "6a764b29ace437d0f76969eac5adf5123dafd006165b8e55ce4df346be7b3bbc"
+    },
+    {
+      "source": "core/cpp/examples/c_api_smoke.c",
+      "path": "backend/core/cpp/examples/c_api_smoke.c",
+      "source_sha256": "5cba9b6377ceae5b9c4bfbd0f1d3fac6a53ab358515b8cf24b9a9e086df695ee"
+    },
+    {
+      "source": "core/cpp/examples/core_demo.cpp",
+      "path": "backend/core/cpp/examples/core_demo.cpp",
+      "source_sha256": "25d72b5c91bf3ba936ea6e4dfa2f6da46b9c36e916e7c4b063ac01919579c254"
+    },
+    {
+      "source": "core/cpp/include/drone_core.hpp",
+      "path": "backend/core/cpp/include/drone_core.hpp",
+      "source_sha256": "7226d14716b107f9b21ba643e6027211ac29fde8b1d80493135062170abcd726"
+    },
+    {
+      "source": "core/cpp/include/drone_core_3d.hpp",
+      "path": "backend/core/cpp/include/drone_core_3d.hpp",
+      "source_sha256": "92087de4fa0f20ab68f1aebd501b47cae5733ec9a9c55f156afea2a05f5df799"
+    },
+    {
+      "source": "core/cpp/include/drone_core_3d_c.h",
+      "path": "backend/core/cpp/include/drone_core_3d_c.h",
+      "source_sha256": "e4487fc85ad5c9a433af4c913201e35ec9b959a05984a3fb782de6e4b49fa55a"
+    },
+    {
+      "source": "core/cpp/include/drone_core_c.h",
+      "path": "backend/core/cpp/include/drone_core_c.h",
+      "source_sha256": "49bc03b349778e46a05945c140d52ec076850cda52bc28e0a9cf5b1c0a28c82c"
+    },
+    {
+      "source": "core/cpp/include/frame_scheduler.hpp",
+      "path": "backend/core/cpp/include/frame_scheduler.hpp",
+      "source_sha256": "dfd5a130cb9127e15a4324cb9e2d268a514846cf29ed091dfb8ec1f6daceca03"
+    },
+    {
+      "source": "core/cpp/README.md",
+      "path": "backend/core/cpp/README.md",
+      "source_sha256": "b44ef002cebcea6b86a2c75e7fefd19dea2022aa5b9bda36a94936ccbb8ece7f"
+    },
+    {
+      "source": "core/cpp/src/drone_core.cpp",
+      "path": "backend/core/cpp/src/drone_core.cpp",
+      "source_sha256": "ee4ad69a8b7990a389f4f23869c70d67920bfb8003db517788d19fd3a7cfa010"
+    },
+    {
+      "source": "core/cpp/src/drone_core_3d.cpp",
+      "path": "backend/core/cpp/src/drone_core_3d.cpp",
+      "source_sha256": "d243213ce1349b6b89b8210e27f710d71cbbd9a9d756af41ca7e9e91231d99f5"
+    },
+    {
+      "source": "core/cpp/src/drone_core_3d_c.cpp",
+      "path": "backend/core/cpp/src/drone_core_3d_c.cpp",
+      "source_sha256": "6c7dd10c7628273c5e51e6eff657ae4fa91e78c03e1643d7c1a3e03355160bdb"
+    },
+    {
+      "source": "core/cpp/src/drone_core_c.cpp",
+      "path": "backend/core/cpp/src/drone_core_c.cpp",
+      "source_sha256": "066e25faa944ad359395966a527cb5eae56377865f7e1d8a33c25e869dd7e882"
+    },
+    {
+      "source": "core/cpp/tests/core_3d_tests.cpp",
+      "path": "backend/core/cpp/tests/core_3d_tests.cpp",
+      "source_sha256": "c6ed1b5a226b4ef47248539e323a8ae91a212d4c7fb6755e92e10eb7df561f72"
+    },
+    {
+      "source": "core/cpp/tests/core_tests.cpp",
+      "path": "backend/core/cpp/tests/core_tests.cpp",
+      "source_sha256": "41bdac76600f78191dd3d973a094726a42c4361ecabd3043f5ea101b87d2212e"
+    },
+    {
+      "source": "core/cpp/tests/environment_tests.cpp",
+      "path": "backend/core/cpp/tests/environment_tests.cpp",
+      "source_sha256": "012ab9d63d007a08c16eac1615e6a276ad099bf675d8b32289b02f892f25dc91"
+    },
+    {
+      "source": "core/cpp/tests/scheduler_tests.cpp",
+      "path": "backend/core/cpp/tests/scheduler_tests.cpp",
+      "source_sha256": "a4b1cf8ea4657595d1a2782f35e05ac602de9f7fafb5c5ecef4b35b2a1314919"
+    },
+    {
+      "source": "core/cpp_core_3d.py",
+      "path": "backend/core/cpp_core_3d.py",
+      "source_sha256": "d368a143dd66811c638d409ff6351d65ec963c1d690d34014344bee9d8f5da52"
+    },
+    {
+      "source": "core/DISTURBANCE_MODEL.md",
+      "path": "backend/core/DISTURBANCE_MODEL.md",
+      "source_sha256": "b92716927134b816903953f3dfe69f177a19856f5816992144765cf3c2fc9d0b"
+    },
+    {
+      "source": "core/download_wheels.py",
+      "path": "backend/core/download_wheels.py",
+      "source_sha256": "15dc0f6b5c83a8bc858aa7af4f05576aec328da12444bfd6bc21086107f515bf"
+    },
+    {
+      "source": "core/fetch_official.py",
+      "path": "backend/core/fetch_official.py",
+      "source_sha256": "a4d591e0f3e7f6242fd94b2257e322aa518b07b7a28575f0c36437dc4cd347ef"
+    },
+    {
+      "source": "core/inspect_model.py",
+      "path": "backend/core/inspect_model.py",
+      "source_sha256": "8147650be91687ad166927dc8cd1e117a484180a296eb6723d6313308b021770"
+    },
+    {
+      "source": "core/lab_config.json",
+      "path": "backend/core/lab_config.json",
+      "source_sha256": "7817b46b506a0d6fdab94183405714b39d76ba9c7e9cfc1ed43f543adac7e54d"
+    },
+    {
+      "source": "core/launch_lab.py",
+      "path": "backend/core/launch_lab.py",
+      "source_sha256": "e53e1c739409b9d83094385d9a76c7e00b8d458c20b1543e3fe553ef9be115d9"
+    },
+    {
+      "source": "core/official_sources.json",
+      "path": "backend/core/official_sources.json",
+      "source_sha256": "4b2f5ebc7e994078182c90104ad84ec4a6e3667b301179a5aba11a7dea4165fd"
+    },
+    {
+      "source": "core/requirements-lock.txt",
+      "path": "backend/core/requirements-lock.txt",
+      "source_sha256": "88536cf5f7b8088400f83b4e1d493788581c49f15a4cfc96fbd9328caf3aaa9b"
+    },
+    {
+      "source": "core/requirements-windows-hashed.txt",
+      "path": "backend/core/requirements-windows-hashed.txt",
+      "source_sha256": "efcc9340910a88afbfad01b7e7c1bf23e83b9e66de8e97936ff2b3130c40921b"
+    },
+    {
+      "source": "core/requirements.txt",
+      "path": "backend/core/requirements.txt",
+      "source_sha256": "0dd28e98280ca2952c663a0764792d787126c1448b9b779cf6788c09d9b4a137"
+    },
+    {
+      "source": "core/run_3d_demo.py",
+      "path": "backend/core/run_3d_demo.py",
+      "source_sha256": "7f95565b0b07f3a321931c897605d5cc4942a918d6c449177c7021ba981c0cc0"
+    },
+    {
+      "source": "core/run_core_demo.py",
+      "path": "backend/core/run_core_demo.py",
+      "source_sha256": "c3d8f88a67bbcdee756cf8b69347276830e9f1560cf9a1057d96889bf4393d05"
+    },
+    {
+      "source": "core/run_disturbance_demo.py",
+      "path": "backend/core/run_disturbance_demo.py",
+      "source_sha256": "6108178a20c6ab2277d4cd0c9a67222e1361c61077797f9e11b15a30edf6f9c5"
+    },
+    {
+      "source": "core/run_lab.py",
+      "path": "backend/core/run_lab.py",
+      "source_sha256": "01977024d19b61f218856d8681d3e6b89465515bccfb330cee2d4c8e015a2151"
+    },
+    {
+      "source": "core/run_official.py",
+      "path": "backend/core/run_official.py",
+      "source_sha256": "95177df87ebcee06ec3d47ea74a8cb64020ceab98d47010658821ce8d2f555fa"
+    },
+    {
+      "source": "core/simulation_core.py",
+      "path": "backend/core/simulation_core.py",
+      "source_sha256": "9c2a998dd40271801ecf4160189d1d82f7efaefc79eaf8b5b16e8eab95d76dcf"
+    },
+    {
+      "source": "core/test_core.py",
+      "path": "backend/core/test_core.py",
+      "source_sha256": "d70e69db47b6ed38bc33a24cb471259e600eb0c6247c4771f00114e37f18021e"
+    },
+    {
+      "source": "core/test_core_3d.py",
+      "path": "backend/core/test_core_3d.py",
+      "source_sha256": "df7c3bbdca07906fbf4af881a7124f6810a31f7f17fb50c4bb71953f955fb05a"
+    },
+    {
+      "source": "core/test_environment.py",
+      "path": "backend/core/test_environment.py",
+      "source_sha256": "5b62b84cc0ebbecaf8db6135ec13a2301a8cde6e2e83bc5851f0a696b6267aa4"
+    },
+    {
+      "source": "core/test_lab.py",
+      "path": "backend/core/test_lab.py",
+      "source_sha256": "a436c36213dac0ba777d63315d4f67e8a7bb7b2b1637088f5fabecc629396c56"
+    },
+    {
+      "source": "core/THREE_DIMENSIONAL_CORE.md",
+      "path": "backend/core/THREE_DIMENSIONAL_CORE.md",
+      "source_sha256": "bb7fa4736c5335118e3e9382b9ff8b903cae88478114e9c2ad1aa24b167c38c8"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/DroneCoreBridge.uplugin",
+      "path": "backend/core/ue/DroneCoreBridge/DroneCoreBridge.uplugin",
+      "source_sha256": "0c0827a7e55b0cf27327c18af1eaa199bb2e92d8a3fb9f6b37e9b8211613f6fc"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/prepared_manifest.json",
+      "path": "backend/core/ue/DroneCoreBridge/prepared_manifest.json",
+      "source_sha256": "392b0155f858bfd26e20294b3e5842bb91f5d538975648a52b973e58d6853eca"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/DroneCoreBridge.Build.cs",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/DroneCoreBridge.Build.cs",
+      "source_sha256": "4fc5c2802736d2c1be2e64d38fcd320d43b9bb072af7d6cf39fec3462e612513"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreBridgeModule.cpp",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreBridgeModule.cpp",
+      "source_sha256": "df50684cd331a16c81ffc835ae0b2dcf526f9981fe40c4b389985a9ec0e87be3"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreComponent.cpp",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreComponent.cpp",
+      "source_sha256": "484560c97f046d5a3a271cf17558a281d4a06b47786cf72bed88470c6892db40"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreDemoActor.cpp",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreDemoActor.cpp",
+      "source_sha256": "4a9a1ea6f926f9647ea4e6056ba4607462e8b59b6e7d03060212c69843fecf40"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreBridgeModule.h",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreBridgeModule.h",
+      "source_sha256": "5444b5931430fda403874853ec752e3ec356c61f6118c7a1c0c21b32ddfb3859"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreComponent.h",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreComponent.h",
+      "source_sha256": "7f2c1c65049c906bc7a6c21aff39d5299ff7c7ca96940604399c972ea444d8f8"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreDemoActor.h",
+      "path": "backend/core/ue/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreDemoActor.h",
+      "source_sha256": "10e2f0e9136da90ab24cb1b602c1d06265d299f4356f3b594af1b1772ba0a8a1"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/ThirdParty/Include/drone_core_c.h",
+      "path": "backend/core/ue/DroneCoreBridge/ThirdParty/Include/drone_core_c.h",
+      "source_sha256": "49bc03b349778e46a05945c140d52ec076850cda52bc28e0a9cf5b1c0a28c82c"
+    },
+    {
+      "source": "core/ue/DroneCoreBridge/ThirdParty/Include/frame_scheduler.hpp",
+      "path": "backend/core/ue/DroneCoreBridge/ThirdParty/Include/frame_scheduler.hpp",
+      "source_sha256": "dfd5a130cb9127e15a4324cb9e2d268a514846cf29ed091dfb8ec1f6daceca03"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/DroneCoreSandbox.uproject",
+      "path": "backend/core/ue/DroneCoreSandbox/DroneCoreSandbox.uproject",
+      "source_sha256": "c4cc3ef8362794b74fa8d168bc1c5bb7ad23c2fb031f477d072511a515348268"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/DroneCoreBridge.uplugin",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/DroneCoreBridge.uplugin",
+      "source_sha256": "0c0827a7e55b0cf27327c18af1eaa199bb2e92d8a3fb9f6b37e9b8211613f6fc"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/prepared_manifest.json",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/prepared_manifest.json",
+      "source_sha256": "392b0155f858bfd26e20294b3e5842bb91f5d538975648a52b973e58d6853eca"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/DroneCoreBridge.Build.cs",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/DroneCoreBridge.Build.cs",
+      "source_sha256": "4fc5c2802736d2c1be2e64d38fcd320d43b9bb072af7d6cf39fec3462e612513"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreBridgeModule.cpp",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreBridgeModule.cpp",
+      "source_sha256": "df50684cd331a16c81ffc835ae0b2dcf526f9981fe40c4b389985a9ec0e87be3"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreComponent.cpp",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreComponent.cpp",
+      "source_sha256": "484560c97f046d5a3a271cf17558a281d4a06b47786cf72bed88470c6892db40"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreDemoActor.cpp",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Private/DroneCoreDemoActor.cpp",
+      "source_sha256": "4a9a1ea6f926f9647ea4e6056ba4607462e8b59b6e7d03060212c69843fecf40"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreBridgeModule.h",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreBridgeModule.h",
+      "source_sha256": "5444b5931430fda403874853ec752e3ec356c61f6118c7a1c0c21b32ddfb3859"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreComponent.h",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreComponent.h",
+      "source_sha256": "7f2c1c65049c906bc7a6c21aff39d5299ff7c7ca96940604399c972ea444d8f8"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreDemoActor.h",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/Source/DroneCoreBridge/Public/DroneCoreDemoActor.h",
+      "source_sha256": "10e2f0e9136da90ab24cb1b602c1d06265d299f4356f3b594af1b1772ba0a8a1"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/ThirdParty/Include/drone_core_c.h",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/ThirdParty/Include/drone_core_c.h",
+      "source_sha256": "49bc03b349778e46a05945c140d52ec076850cda52bc28e0a9cf5b1c0a28c82c"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/ThirdParty/Include/frame_scheduler.hpp",
+      "path": "backend/core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/ThirdParty/Include/frame_scheduler.hpp",
+      "source_sha256": "dfd5a130cb9127e15a4324cb9e2d268a514846cf29ed091dfb8ec1f6daceca03"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Source/DroneCoreSandbox/DroneCoreSandbox.Build.cs",
+      "path": "backend/core/ue/DroneCoreSandbox/Source/DroneCoreSandbox/DroneCoreSandbox.Build.cs",
+      "source_sha256": "5df0d8c097783662562b1cc309624e7b263cdf30c0663dcfc8912deeb2f2b51c"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Source/DroneCoreSandbox/DroneCoreSandbox.cpp",
+      "path": "backend/core/ue/DroneCoreSandbox/Source/DroneCoreSandbox/DroneCoreSandbox.cpp",
+      "source_sha256": "a3bf09e287142a9a86c0f0635c5f705fb69a6d576e1c54c9d7d7baf043d780a6"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Source/DroneCoreSandbox.Target.cs",
+      "path": "backend/core/ue/DroneCoreSandbox/Source/DroneCoreSandbox.Target.cs",
+      "source_sha256": "88d41e882fb702329f4e5e40ec458dec3f167e50d25d889be26eae747b028614"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Source/DroneCoreSandboxEditor.Target.cs",
+      "path": "backend/core/ue/DroneCoreSandbox/Source/DroneCoreSandboxEditor.Target.cs",
+      "source_sha256": "93f6c89a26ac0ee7a38358b46f5489eccaf886d683519973110d3732a47b6343"
+    },
+    {
+      "source": "core/ue/prepare_ue_plugin.ps1",
+      "path": "backend/core/ue/prepare_ue_plugin.ps1",
+      "source_sha256": "60215229cb98a99ec3d3d52278387ef7c5cb74eb419650c2483dc124df8f1457"
+    },
+    {
+      "source": "core/ue/README.md",
+      "path": "backend/core/ue/README.md",
+      "source_sha256": "40b20b74dcb33d628b71b0dfec2f56d2e0ac5fe617fd6a68887a6c1b8caad44a"
+    },
+    {
+      "source": "core/validate_3d.py",
+      "path": "backend/core/validate_3d.py",
+      "source_sha256": "c614226e0e14e41e58c4467b997488db0aeab3b7b1007735e60423a84331bc38"
+    },
+    {
+      "source": "core/vendor/examples/basic_usage.py",
+      "path": "backend/core/vendor/examples/basic_usage.py",
+      "source_sha256": "44155451ec9d960654c4e37f8b9132a10ce27340ded630864b25454a81dd2ba4"
+    },
+    {
+      "source": "core/vendor/LICENSE.md",
+      "path": "backend/core/vendor/LICENSE.md",
+      "source_sha256": "2d071d5adbe090f4c3e55ca49a7e1821d8b5353fb813f8b6f37350494a587666"
+    },
+    {
+      "source": "core/vendor/pyproject.toml",
+      "path": "backend/core/vendor/pyproject.toml",
+      "source_sha256": "fa41a6bf299b65795ae1593e4e231f7c86a1280520e40e78754f7a61c39fb950"
+    },
+    {
+      "source": "core/vendor/rotorpy/controllers/quadrotor_control.py",
+      "path": "backend/core/vendor/rotorpy/controllers/quadrotor_control.py",
+      "source_sha256": "54ccd85eb4284b1aecbd7a06697311ab406f10a33a8d4855bc2390f4821cd927"
+    },
+    {
+      "source": "core/vendor/rotorpy/environments.py",
+      "path": "backend/core/vendor/rotorpy/environments.py",
+      "source_sha256": "c7e1a1dc168632cbcd93b05d797267f5388c7f72940f9ba51a6b84cdd6232e44"
+    },
+    {
+      "source": "core/vendor/rotorpy/simulate.py",
+      "path": "backend/core/vendor/rotorpy/simulate.py",
+      "source_sha256": "2368253b379b61a3d34468013d74d10161b5a59c362df8e3b4ca0d400e0ffb54"
+    },
+    {
+      "source": "core/vendor/rotorpy/trajectories/hover_traj.py",
+      "path": "backend/core/vendor/rotorpy/trajectories/hover_traj.py",
+      "source_sha256": "7c501d58e966e18ce310b35ac895b39fae68ac121002d1406584c95e9e55188f"
+    },
+    {
+      "source": "core/vendor/rotorpy/vehicles/crazyflie_params.py",
+      "path": "backend/core/vendor/rotorpy/vehicles/crazyflie_params.py",
+      "source_sha256": "56847710dfd921c9247d62b7385d227653b2535c474053170ab2da408c3eb2f1"
+    },
+    {
+      "source": "core/vendor/rotorpy/vehicles/multirotor.py",
+      "path": "backend/core/vendor/rotorpy/vehicles/multirotor.py",
+      "source_sha256": "ef6fe4f31e85216e7635d9f7f42fda5945c2fcb8be232a0f9a89e8572d5438fb"
+    },
+    {
+      "source": "core/vendor/rotorpy/worlds/double_pillar.json",
+      "path": "backend/core/vendor/rotorpy/worlds/double_pillar.json",
+      "source_sha256": "5180dc6a566dde4aebd14aaa97da84f566f550dc705b26c8fd0d2a50d3b793e5"
+    },
+    {
+      "source": "core/verify_cpp_bridge.py",
+      "path": "backend/core/verify_cpp_bridge.py",
+      "source_sha256": "7a4958c83a028ffaddc48aac9bb9393dbdc149e90d5def50213c241970b60b7d"
+    },
+    {
+      "source": "core/verify_package.py",
+      "path": "backend/core/verify_package.py",
+      "source_sha256": "99f1ac7aed3c5950c20b0098d65ab864868dfbbcf804d215db74e6adf20aca29"
+    },
+    {
+      "source": "core/VSCODE_DEBUG.md",
+      "path": "backend/core/VSCODE_DEBUG.md",
+      "source_sha256": "2f647867fcd05487e8ac3c5976310227e0711f4ffc0c10f891224698ae3aa87a"
+    },
+    {
+      "source": "core/wind_profiles.py",
+      "path": "backend/core/wind_profiles.py",
+      "source_sha256": "176525d79d060025bec124a2d911639edb6753b3e6119046641f1f2b2fe78ad7"
+    },
+    {
+      "source": "CTL要求与验证.md",
+      "path": "backend/CTL要求与验证.md",
+      "source_sha256": "d4b4231e6df8086e9bfec0c86e833d316f31ead4b836c24e5f54132892670363"
+    },
+    {
+      "source": "hardware_acceptance_template.json",
+      "path": "backend/hardware_acceptance_template.json",
+      "source_sha256": "22fdec6815f8f5b893283cfb611d81217226af1b2548c9c13c3eafd68fb50e61"
+    },
+    {
+      "source": "hardware_profile.json",
+      "path": "backend/hardware_profile.json",
+      "source_sha256": "b2edef51e2b738cf2b0d0baa4a00ab2b8b0ab6398b1c32791d3fc4cd83f33762"
+    },
+    {
+      "source": "http_transport.py",
+      "path": "backend/http_transport.py",
+      "source_sha256": "c71b44d6957ab7238fab4dec6fa5aa4fb44ccfd34e557fbb7f61f4b29c475ece"
+    },
+    {
+      "source": "independent_client.py",
+      "path": "backend/independent_client.py",
+      "source_sha256": "d1bf8472e319cecada6fb3b5ffdd4c1c2ad86376735eb32672b79fabd4d12d8c"
+    },
+    {
+      "source": "independent_credentials.json",
+      "path": "backend/independent_credentials.json",
+      "source_sha256": "c42a81df525465c9f72a171e17dd83315185151ae466d610d35788d28e64e337"
+    },
+    {
+      "source": "independent_fleet.py",
+      "path": "backend/independent_fleet.py",
+      "source_sha256": "73ecd1e71ee4e8ef94062315254b664217951b92cb67f3c4691106fc1d05065c"
+    },
+    {
+      "source": "independent_server.py",
+      "path": "backend/independent_server.py",
+      "source_sha256": "f6fd08fe7cc0d1f2837e25d8de90bb4ad0024fc13f65ebd3bbfd3b105cd2f8cf"
+    },
+    {
+      "source": "input_protocol.py",
+      "path": "backend/input_protocol.py",
+      "source_sha256": "806b56d56e36d5498cdca847c949af36172bb00cc36a39a132694a6eb4dffc00"
+    },
+    {
+      "source": "IN接口补充说明.md",
+      "path": "backend/IN接口补充说明.md",
+      "source_sha256": "071c93ca361a3e9709d0adf1bbada2b2a2ce7eeec74642f0ba58ad66b9e5cd41"
+    },
+    {
+      "source": "IN要求与验证.md",
+      "path": "backend/IN要求与验证.md",
+      "source_sha256": "cd5df3d725fcb42792534da069b1baefdc14e358a2290bb653f9fda41a2b136d"
+    },
+    {
+      "source": "openapi.json",
+      "path": "backend/openapi.json",
+      "source_sha256": "389bc10ce4bba9f3465c2ea7471014e6019d7764ca39c1b680fc53433a41e5df"
+    },
+    {
+      "source": "openapi_cluster.json",
+      "path": "backend/openapi_cluster.json",
+      "source_sha256": "f857cb61bee9ddee2b0e4cdec8b56fae71683258f43dfe97a687dca8654d2bd7"
+    },
+    {
+      "source": "openapi_independent.json",
+      "path": "backend/openapi_independent.json",
+      "source_sha256": "78d364636a0e56f08354856ed20351b327a2cee398be3ae4e951c95f23559ac8"
+    },
+    {
+      "source": "openapi_unified.json",
+      "path": "backend/openapi_unified.json",
+      "source_sha256": "545de0dacd82562d236b61d40f5f9bd43b1f5e003b51f661e70151274d7e2a2b"
+    },
+    {
+      "source": "README.md",
+      "path": "backend/README.md",
+      "source_sha256": "7a193b2be3234865e8d454e65d98fd78b676decf177dd27d0933876990da4f3b"
+    },
+    {
+      "source": "README_v0.8.md",
+      "path": "backend/README_v0.8.md",
+      "source_sha256": "cfbd11820b5dc2f62a28a12d1985ea2d0040cf7638142d8cc7e9f9fa71424f99"
+    },
+    {
+      "source": "README_v0.9.md",
+      "path": "backend/README_v0.9.md",
+      "source_sha256": "adff48b69c807c2570c9ba9be31bdaa0af39607878ff5686ac0ecdcf1b1febe0"
+    },
+    {
+      "source": "README_单机v0.5.1.md",
+      "path": "backend/README_单机v0.5.1.md",
+      "source_sha256": "0b7331c6a6352d8956a9230f1503cf65c2cabedee8a9b0b87a951480b524f3f0"
+    },
+    {
+      "source": "run_backend.py",
+      "path": "backend/run_backend.py",
+      "source_sha256": "4c52237843a3811607c59bef5446803785da73a69eb6a25c3798904f4556ceee"
+    },
+    {
+      "source": "run_checks.py",
+      "path": "backend/run_checks.py",
+      "source_sha256": "6c5654c7a198ac3364a048118beb2f24e6dc912bba171858ecd6ee83d2023972"
+    },
+    {
+      "source": "run_cluster_demo.py",
+      "path": "backend/run_cluster_demo.py",
+      "source_sha256": "2da621de7268dd9264097e26945e944454666e9f5701711b3517261f6aa25d35"
+    },
+    {
+      "source": "run_handover_demo.py",
+      "path": "backend/run_handover_demo.py",
+      "source_sha256": "b530c99fa2f9b944bfbba666fa7d46faff6cf8983608518bb49db8d3f50a6516"
+    },
+    {
+      "source": "run_independent_acceptance.py",
+      "path": "backend/run_independent_acceptance.py",
+      "source_sha256": "1169e1314d975a2345dd1c08dd37c4967a8ec2358eff52f9ea763123533dbf13"
+    },
+    {
+      "source": "runtime_info.py",
+      "path": "backend/runtime_info.py",
+      "source_sha256": "f0da662c50d4fe7a5c3b17c16dabe95b15af8fe57c5facc5e9f88be1e5654dfc"
+    },
+    {
+      "source": "sdk_bridge.py",
+      "path": "backend/sdk_bridge.py",
+      "source_sha256": "82a15b071d38c95105361efef122d446413ffed8099968ae15e3757424174178"
+    },
+    {
+      "source": "SDK接入与兼容说明.md",
+      "path": "backend/SDK接入与兼容说明.md",
+      "source_sha256": "6d880411ae3db53e5e237857dba68c08e53f351dce7a3d1eb055f75e9878a453"
+    },
+    {
+      "source": "start_backend.ps1",
+      "path": "backend/start_backend.ps1",
+      "source_sha256": "53afedcb6233a4865445bf2123ce7571fcd410d836a047db1ffe0046f7d7508a"
+    },
+    {
+      "source": "start_cluster_server.ps1",
+      "path": "backend/start_cluster_server.ps1",
+      "source_sha256": "a1d0198f343b09b8f6c49b8dd70cbbdd6bfb3153ee3a4576b592d5381b0dfc42"
+    },
+    {
+      "source": "start_server.ps1",
+      "path": "backend/start_server.ps1",
+      "source_sha256": "8b71c7e1fb76c8ade04d01cb05043e99058402d8d8b45ecd59228f049fd1b0ff"
+    },
+    {
+      "source": "test_boundary.py",
+      "path": "backend/test_boundary.py",
+      "source_sha256": "059619b1d2ad5843024cf310567fc6439ceada4fb04b11991c96f7da2060af2f"
+    },
+    {
+      "source": "test_cluster.py",
+      "path": "backend/test_cluster.py",
+      "source_sha256": "6453ff35afaebfd9ca79bbeadf959cb0fcbf0e1b9d71ec4df4ed699f845c4cbd"
+    },
+    {
+      "source": "test_ctl.py",
+      "path": "backend/test_ctl.py",
+      "source_sha256": "25267ed34d3c7b938a7d181701a5247c3221dcfc1c479f74291a8cdddfb45e98"
+    },
+    {
+      "source": "test_independent.py",
+      "path": "backend/test_independent.py",
+      "source_sha256": "72e808018cdf1244c707740fc75ec219f2708b0f3443636559834d18be356a9a"
+    },
+    {
+      "source": "test_inputs.py",
+      "path": "backend/test_inputs.py",
+      "source_sha256": "d4d3f1f13da6a5248098892e5f7ee5256b9e21fdf87e851686b6f2b562b5c08a"
+    },
+    {
+      "source": "test_unified.py",
+      "path": "backend/test_unified.py",
+      "source_sha256": "92c795f254e26b84e2d43ebf5caf1e1938341974c85d2371ad673b5af9b5efb3"
+    },
+    {
+      "source": "test_upgrade.py",
+      "path": "backend/test_upgrade.py",
+      "source_sha256": "7c2e9410b492579bf1b6c5d23c0486c7f5bd3b608f4f1fba03335c2b1d968679"
+    },
+    {
+      "source": "unified_contract.py",
+      "path": "backend/unified_contract.py",
+      "source_sha256": "988fd1a0fd81f53e792a9263be0caef474da240120d3ee05abb6413089c8abf7"
+    },
+    {
+      "source": "unified_server.py",
+      "path": "backend/unified_server.py",
+      "source_sha256": "0575a1fc5dce92e2022d2fb1e4ecefcac7f81c6cf52856899c31b58a18f75813"
+    },
+    {
+      "source": "vendor_provider_example.py",
+      "path": "backend/vendor_provider_example.py",
+      "source_sha256": "471a7a89ddf2932237567d207576aa60227e1a31ddbb0709c00436e89170efa2"
+    },
+    {
+      "source": "前端对接_三机独立操控.md",
+      "path": "backend/前端对接_三机独立操控.md",
+      "source_sha256": "c46b4683d1dd63b0460caf6bae7445f3f924c23b1e9c18b10c7058997b433e24"
+    },
+    {
+      "source": "前端对接说明.md",
+      "path": "backend/前端对接说明.md",
+      "source_sha256": "88f42f0d48e3a0d9234383733e8a980e074e30e7e4298f773870b0fcfc776da7"
+    },
+    {
+      "source": "升级说明_v0.7.md",
+      "path": "backend/升级说明_v0.7.md",
+      "source_sha256": "bf9f24fb7f9a8038bc37a7abbdea995b17093b4df43945fe905de4d14c51a3db"
+    },
+    {
+      "source": "契约样例_v0.9/observer-first-SSE数据.json",
+      "path": "backend/契约样例_v0.9/observer-first-SSE数据.json",
+      "source_sha256": "31d824cdff78720ad59e83a807ecb99212af8cd6b51f8bc2e58daf5e5f28dbb0"
+    },
+    {
+      "source": "契约样例_v0.9/observer-last-SSE数据.json",
+      "path": "backend/契约样例_v0.9/observer-last-SSE数据.json",
+      "source_sha256": "a8640d21fe392a239a302cb77b50a6e38b96de0632488b15a8a67b5de908bb4a"
+    },
+    {
+      "source": "契约样例_v0.9/pilot-1-first-SSE数据.json",
+      "path": "backend/契约样例_v0.9/pilot-1-first-SSE数据.json",
+      "source_sha256": "95800120feb1409870b52f0a89778a4b860840647a26e21c0898e91994e18db7"
+    },
+    {
+      "source": "契约样例_v0.9/pilot-1-last-SSE数据.json",
+      "path": "backend/契约样例_v0.9/pilot-1-last-SSE数据.json",
+      "source_sha256": "5152ca434f66fa66898122f6ed853a49d4120139ed3f9d434e73d2aeb9817ffc"
+    },
+    {
+      "source": "契约样例_v0.9/pilot-2-first-SSE数据.json",
+      "path": "backend/契约样例_v0.9/pilot-2-first-SSE数据.json",
+      "source_sha256": "d705362ee830806795c19c758012011d0a59ee1ddb65ec1997c29e3b9d7ee250"
+    },
+    {
+      "source": "契约样例_v0.9/pilot-2-last-SSE数据.json",
+      "path": "backend/契约样例_v0.9/pilot-2-last-SSE数据.json",
+      "source_sha256": "97c11e53d8175c04dda92acb1fafb2fea92b50f553eaea38a8083b6848e85c4c"
+    },
+    {
+      "source": "契约样例_v0.9/pilot-3-first-SSE数据.json",
+      "path": "backend/契约样例_v0.9/pilot-3-first-SSE数据.json",
+      "source_sha256": "e8034b17cf317e9e9be84e7d898886f5959822b9060583e77274eaa36473fadd"
+    },
+    {
+      "source": "契约样例_v0.9/pilot-3-last-SSE数据.json",
+      "path": "backend/契约样例_v0.9/pilot-3-last-SSE数据.json",
+      "source_sha256": "b1c6625a9e28c14b5bc2f646feefb1391744491ef0d81a1a0fa730c01b2f4398"
+    },
+    {
+      "source": "接口统一对接说明_v1.0.md",
+      "path": "backend/接口统一对接说明_v1.0.md",
+      "source_sha256": "d9382d7ebe2a53bae7cb820575b8d6773b51e0758621402d4e1bd24ce4db08f3"
+    },
+    {
+      "source": "测试步骤.md",
+      "path": "backend/测试步骤.md",
+      "source_sha256": "9bfa57bd4bc48a20c54275bc6bcdaf50c178204a368988977cec519362a527aa"
+    },
+    {
+      "source": "集群接口与前端对接.md",
+      "path": "backend/集群接口与前端对接.md",
+      "source_sha256": "8274603de99f5fc48ef39778de5bc219558ebab45fdd090284277f79f73c37b2"
+    },
+    {
+      "source": "验证报告_v0.7.md",
+      "path": "backend/验证报告_v0.7.md",
+      "source_sha256": "cf3b910b273361f4406c2246d1014a75a16b2b199b779919e709d729e1ff96d9"
+    },
+    {
+      "source": "验证报告_v0.8.md",
+      "path": "backend/验证报告_v0.8.md",
+      "source_sha256": "57e120768f4cce34e13d2237bef297e847b8d52401cc05f50f4cc48942ffdbc8"
+    },
+    {
+      "source": "验证报告_v0.9.md",
+      "path": "backend/验证报告_v0.9.md",
+      "source_sha256": "590c4753b52d4c64b32a7dafd1d4f01b08b3de08d542e6ad0155203c236eee3b"
+    }
+  ],
+  "excluded": [
+    {
+      "source": "core/ue/DroneCoreBridge/ThirdParty/Win64/drone_core_c.dll",
+      "reason": "预编译或生成产物，保留源码及构建入口"
+    },
+    {
+      "source": "core/ue/DroneCoreSandbox/Plugins/DroneCoreBridge/ThirdParty/Win64/drone_core_c.dll",
+      "reason": "预编译或生成产物，保留源码及构建入口"
+    },
+    {
+      "source": "core/实验说明.html",
+      "reason": "预编译或生成产物，保留源码及构建入口"
+    },
+    {
+      "source": "examples/browser_state.html",
+      "reason": "预编译或生成产物，保留源码及构建入口"
+    },
+    {
+      "source": "results/checks/backend-before-extra-isolation.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/backend.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/doctor.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/dynamics.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/full-run.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/independent-first-code-failure.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/independent-initial-environment.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/independent-initial-network.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/independent.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/three-pilot-live.txt",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/checks/v1-smoke.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/instances/fleet_events.jsonl",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/instances/sim-drone-1/dynamics.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/instances/sim-drone-2/dynamics.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/instances/sim-drone-3/dynamics.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/observer-first.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/observer-last.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/pilot-1-first.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/pilot-1-last.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/pilot-2-first.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/pilot-2-last.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/pilot-3-first.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/pilot-3-last.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/independent_acceptance/summary.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    },
+    {
+      "source": "results/verification_summary.json",
+      "reason": "运行日志与环境记录；另提供精简历史验证摘要"
+    }
+  ]
+}

@@ -1,0 +1,3778 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "三机独立操控与全机观察接口",
+    "version": "0.9.0",
+    "description": "independent 模式；设备绑定开发凭据；每端只能写本机、所有端观察全机。设备写报文沿用0.5语义；不是草案MotionIntent。"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8765",
+      "description": "实际部署请替换为电脑IPv4"
+    }
+  ],
+  "paths": {
+    "/api/v1/capabilities": {
+      "get": {
+        "summary": "能力及认证方式发现",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Capabilities"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices": {
+      "get": {
+        "summary": "实际设备目录",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Directory"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/state": {
+      "get": {
+        "summary": "全部成员统一状态",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FleetState"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "summary": "全部成员统一状态SSE",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "event: state；data为FleetState对象；不包ok/data外壳"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/state": {
+      "get": {
+        "summary": "指定成员统一状态",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DeviceState"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}/events": {
+      "get": {
+        "summary": "指定成员统一状态SSE",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "event: state；data为DeviceState对象；不包ok/data外壳"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}/commands/{source}/{command_id}": {
+      "get": {
+        "summary": "统一命令回执查询",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          },
+          {
+            "name": "source",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "ring",
+                "voice"
+              ]
+            },
+            "in": "path"
+          },
+          {
+            "name": "command_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          }
+        ],
+        "description": "仅有该设备写权限的身份可查；只读端或其他设备操纵端返回403。"
+      }
+    },
+    "/api/v1/devices/{device_id}/session": {
+      "post": {
+        "summary": "本机 session",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/heartbeat": {
+      "post": {
+        "summary": "本机 heartbeat",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {}
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/switch": {
+      "post": {
+        "summary": "本机 switch",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/adaptive-switch": {
+      "post": {
+        "summary": "本机 adaptive-switch",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/neutral": {
+      "post": {
+        "summary": "本机 neutral",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/input": {
+      "post": {
+        "summary": "本机 input",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "intent_sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "frame": {
+                        "type": "string",
+                        "enum": [
+                          "world",
+                          "heading"
+                        ]
+                      },
+                      "axes": {
+                        "type": "array",
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "items": {
+                          "type": "number",
+                          "minimum": -1,
+                          "maximum": 1
+                        }
+                      }
+                    },
+                    "required": [
+                      "intent_sequence",
+                      "frame",
+                      "axes"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/control": {
+      "post": {
+        "summary": "本机 control",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "intent_sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/stop": {
+      "post": {
+        "summary": "本机 stop",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/protect": {
+      "post": {
+        "summary": "本机 protect",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/resume": {
+      "post": {
+        "summary": "本机 resume",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/cancel": {
+      "post": {
+        "summary": "本机 cancel",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/disconnect": {
+      "post": {
+        "summary": "本机 disconnect",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/config": {
+      "post": {
+        "summary": "本机 config",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/ring-event": {
+      "post": {
+        "summary": "本机 ring-event",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {}
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/voice-result": {
+      "post": {
+        "summary": "本机 voice-result",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "intent_sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/voice": {
+      "post": {
+        "summary": "本机 voice",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "intent_sequence": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/confirm": {
+      "post": {
+        "summary": "本机 confirm",
+        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "command_id"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Vector3": {
+        "type": "object",
+        "nullable": true,
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          }
+        }
+      },
+      "Quaternion": {
+        "type": "object",
+        "nullable": true,
+        "required": [
+          "x",
+          "y",
+          "z",
+          "w"
+        ],
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          },
+          "w": {
+            "type": "number"
+          }
+        }
+      },
+      "DeviceState": {
+        "type": "object",
+        "required": [
+          "contract_version",
+          "device_id",
+          "boot_id",
+          "sequence",
+          "server_time_unix_ms",
+          "online",
+          "mode",
+          "coordinate_frame",
+          "position",
+          "velocity",
+          "attitude",
+          "battery",
+          "gnss",
+          "control"
+        ],
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "enum": [
+              "1.0"
+            ]
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_time_unix_ms": {
+            "type": "number"
+          },
+          "simulation_time_s": {
+            "type": "number"
+          },
+          "state_age_ms": {
+            "type": "number",
+            "nullable": true
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "coordinate_frame": {
+            "type": "string",
+            "enum": [
+              "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP"
+            ]
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Vector3"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "m"
+                ]
+              }
+            }
+          },
+          "velocity": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Vector3"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "m/s"
+                ]
+              }
+            }
+          },
+          "attitude": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Quaternion"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              }
+            }
+          },
+          "angular_velocity": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Vector3"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "rad/s"
+                ]
+              }
+            }
+          },
+          "battery": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "%"
+                ]
+              }
+            }
+          },
+          "gnss": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity"
+            ],
+            "properties": {
+              "value": {
+                "type": "object",
+                "nullable": true
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              }
+            }
+          },
+          "sensors": {
+            "type": "object"
+          },
+          "task": {
+            "type": "object"
+          },
+          "video": {
+            "type": "object"
+          },
+          "alarms": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "control": {
+            "type": "object",
+            "description": "write_permitted 只是权限；has_control=null，本地会话/epoch/归中仍须有效",
+            "properties": {
+              "write_permitted": {
+                "type": "boolean"
+              },
+              "has_control": {
+                "type": "boolean",
+                "nullable": true
+              },
+              "phase": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "nullable": true
+              },
+              "selected_source": {
+                "type": "string",
+                "nullable": true
+              },
+              "pending_source": {
+                "type": "string",
+                "nullable": true
+              },
+              "control_epoch": {
+                "type": "string"
+              },
+              "lease_required": {
+                "type": "boolean"
+              }
+            }
+          },
+          "is_self": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FleetState": {
+        "type": "object",
+        "required": [
+          "contract_version",
+          "cluster_id",
+          "boot_id",
+          "target_revision",
+          "members",
+          "selection"
+        ],
+        "properties": {
+          "contract_version": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "integer"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceState"
+            }
+          },
+          "selection": {
+            "type": "object",
+            "nullable": true
+          },
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "summary": {
+            "type": "object"
+          },
+          "deployment_mode": {
+            "type": "string",
+            "enum": [
+              "INDEPENDENT"
+            ]
+          },
+          "self_device_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "viewer_role": {
+            "type": "string",
+            "enum": [
+              "CONTROLLER",
+              "OBSERVER"
+            ]
+          },
+          "audit": {
+            "type": "object"
+          }
+        }
+      },
+      "Receipt": {
+        "type": "object",
+        "required": [
+          "phase",
+          "raw_code",
+          "completion_scope"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "device_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "WAITING_NEUTRAL",
+              "WAITING_CONFIRMATION",
+              "EXECUTING",
+              "COMPLETED",
+              "FAILED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED",
+              "TIMED_OUT",
+              "OUTCOME_UNKNOWN",
+              "PARTIAL"
+            ]
+          },
+          "raw_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "completion_scope": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "SERVICE_APPLIED",
+              null
+            ]
+          }
+        }
+      },
+      "Capabilities": {
+        "type": "object",
+        "required": [
+          "deployment_mode",
+          "authentication",
+          "writable_device_ids",
+          "routes"
+        ],
+        "properties": {
+          "deployment_mode": {
+            "type": "string",
+            "enum": [
+              "INDEPENDENT"
+            ]
+          },
+          "authentication": {
+            "type": "object"
+          },
+          "self_device_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "writable_device_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "protocols": {
+            "type": "object"
+          },
+          "routes": {
+            "type": "object"
+          },
+          "capabilities": {
+            "type": "object"
+          },
+          "control_policy": {
+            "type": "object"
+          }
+        }
+      },
+      "Directory": {
+        "type": "object",
+        "required": [
+          "devices",
+          "cluster_id",
+          "target_revision"
+        ],
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error",
+          "error_code",
+          "request_id"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "error_detail": {
+            "type": "object"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      },
+      "MemberEnvelope": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "cluster_id",
+          "session_id",
+          "control_epoch",
+          "command_sequence",
+          "sent_at_ms",
+          "ttl_ms"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "control_epoch": {
+            "type": "string"
+          },
+          "command_sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sent_at_ms": {
+            "type": "number",
+            "description": "当前Unix毫秒"
+          },
+          "ttl_ms": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "maximum": 500
+          }
+        }
+      },
+      "SessionRequest": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "cluster_id",
+          "user_initiated"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "user_initiated": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        }
+      },
+      "RawControlResult": {
+        "type": "object",
+        "description": "成员0.5原始状态及应答元数据；不是统一DeviceState。",
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "control_epoch": {
+            "type": "string"
+          },
+          "ack": {
+            "type": "object"
+          },
+          "command_status": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "sourceToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "DEVELOPMENT_SOURCE_TOKEN",
+        "description": "Authorization Bearer，使用独立的设备绑定或只读 Token；不是旧 app 来源通用 Token。"
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "evidence_date": "2026-10-20",
+  "imported_to_repository": "2026-11-03",
+  "evidence_type": "HISTORICAL_LOCAL_LOOPBACK_NOT_RERUN",
+  "data": {
+    "implementation_version": "0.9.0",
+    "backend_tests": {
+      "tests": 94,
+      "passed": 94
+    },
+    "dynamics_tests": {
+      "tests": 27,
+      "passed": 26,
+      "skipped": 1,
+      "reason": "可选历史结果检查"
+    },
+    "independent_tests": 16,
+    "included_in_backend_count": true,
+    "three_control_four_observe": {
+      "passed": true,
+      "duration_s": 60,
+      "online_instances": 3,
+      "controlled_instances": 3,
+      "sensor_enabled_instances": 3,
+      "control_ttl_ms": 500,
+      "controls": [
+        {
+          "device_id": "sim-drone-1",
+          "errors": [],
+          "samples": 1182,
+          "p95_ms": 21.21679999982007,
+          "max_ms": 58.71299999853363
+        },
+        {
+          "device_id": "sim-drone-2",
+          "errors": [],
+          "samples": 1182,
+          "p95_ms": 21.52140000180225,
+          "max_ms": 56.04550000134623
+        },
+        {
+          "device_id": "sim-drone-3",
+          "errors": [],
+          "samples": 1182,
+          "p95_ms": 21.26209999914863,
+          "max_ms": 39.65840000091703
+        }
+      ],
+      "observers": [
+        {
+          "client_id": "pilot-1",
+          "samples": 1500,
+          "frames_per_test_second": 25.0,
+          "errors": []
+        },
+        {
+          "client_id": "pilot-2",
+          "samples": 1500,
+          "frames_per_test_second": 25.0,
+          "errors": []
+        },
+        {
+          "client_id": "pilot-3",
+          "samples": 1499,
+          "frames_per_test_second": 24.983333333333334,
+          "errors": []
+        },
+        {
+          "client_id": "observer",
+          "samples": 1499,
+          "frames_per_test_second": 24.983333333333334,
+          "errors": []
+        }
+      ],
+      "audit_drained": true,
+      "audit": {
+        "healthy": false,
+        "failure": null,
+        "pending": 0,
+        "capacity": 8192,
+        "accepted": 3567,
+        "written": 3567,
+        "rejected": 0,
+        "failed_events_retained": 0,
+        "flush_interval_ms": 100,
+        "durability": "BUFFERED_NO_FSYNC"
+      },
+      "scope": "本机回环；3路Python HTTP控制+4路SSE观察，非手机刷新率、非局域网或4小时验收"
+    },
+    "phone_lan_acceptance": false,
+    "app_ui_refresh_acceptance": false,
+    "four_hour_acceptance": false,
+    "frontend_modified": false,
+    "baseline_backend_v08_preserved": true,
+    "explicit_v1_three_device_smoke": true
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "seed": 7,
+  "duration_s": 8.0,
+  "sim_rate_hz": 100,
+  "hover_position_m": [0.0, 0.0, 1.0],
+  "recovery_offset_m": [0.3, -0.2, 0.2],
+  "mass_scale": 1.0,
+  "position_gain_scale": 1.0,
+  "motor_noise_rad_s": 0.0,
+  "tail_window_s": 1.0,
+  "tail_rmse_limit_m": 0.05
+}

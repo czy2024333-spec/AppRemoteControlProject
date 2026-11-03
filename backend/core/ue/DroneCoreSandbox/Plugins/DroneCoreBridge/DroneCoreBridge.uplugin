@@ -1,0 +1,12 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1",
+  "FriendlyName": "Drone Core Bridge",
+  "Description": "Offline vertical drone prototype using a fixed-step C core. UE build validation pending.",
+  "Category": "Simulation",
+  "CanContainContent": false,
+  "Installed": false,
+  "SupportedTargetPlatforms": ["Win64"],
+  "Modules": [{"Name": "DroneCoreBridge", "Type": "Runtime", "LoadingPhase": "Default", "PlatformAllowList": ["Win64"]}]
+}

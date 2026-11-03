@@ -1,0 +1,1258 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "无人机统一只读接口",
+    "version": "1.0",
+    "description": "后端0.8.0；旧写控制见openapi.json及openapi_cluster.json。v1统一MotionIntent写协议尚未开放。来源Token是开发认证，不是正式用户角色。"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8765",
+      "description": "实际部署请替换为电脑IPv4"
+    }
+  ],
+  "paths": {
+    "/api/v1/capabilities": {
+      "get": {
+        "summary": "能力及认证方式发现",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Capabilities"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices": {
+      "get": {
+        "summary": "实际设备目录",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Directory"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/state": {
+      "get": {
+        "summary": "全部成员统一状态",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FleetState"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "summary": "全部成员统一状态SSE",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "event: state；data为FleetState对象；不包ok/data外壳"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/devices/{device_id}/state": {
+      "get": {
+        "summary": "指定成员统一状态",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DeviceState"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}/events": {
+      "get": {
+        "summary": "指定成员统一状态SSE",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "event: state；data为DeviceState对象；不包ok/data外壳"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{device_id}/commands/{source}/{command_id}": {
+      "get": {
+        "summary": "统一命令回执查询",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          },
+          {
+            "name": "source",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "ring",
+                "voice"
+              ]
+            },
+            "in": "path"
+          },
+          {
+            "name": "command_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "in": "path"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Vector3": {
+        "type": "object",
+        "nullable": true,
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          }
+        }
+      },
+      "Quaternion": {
+        "type": "object",
+        "nullable": true,
+        "required": [
+          "x",
+          "y",
+          "z",
+          "w"
+        ],
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          },
+          "w": {
+            "type": "number"
+          }
+        }
+      },
+      "DeviceState": {
+        "type": "object",
+        "required": [
+          "contract_version",
+          "device_id",
+          "boot_id",
+          "sequence",
+          "server_time_unix_ms",
+          "online",
+          "mode",
+          "coordinate_frame",
+          "position",
+          "velocity",
+          "attitude",
+          "battery",
+          "gnss",
+          "control"
+        ],
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "enum": [
+              "1.0"
+            ]
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_time_unix_ms": {
+            "type": "number"
+          },
+          "simulation_time_s": {
+            "type": "number"
+          },
+          "state_age_ms": {
+            "type": "number",
+            "nullable": true
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "coordinate_frame": {
+            "type": "string",
+            "enum": [
+              "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP"
+            ]
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Vector3"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "m"
+                ]
+              }
+            }
+          },
+          "velocity": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Vector3"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "m/s"
+                ]
+              }
+            }
+          },
+          "attitude": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Quaternion"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              }
+            }
+          },
+          "angular_velocity": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "$ref": "#/components/schemas/Vector3"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "rad/s"
+                ]
+              }
+            }
+          },
+          "battery": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity",
+              "unit"
+            ],
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "%"
+                ]
+              }
+            }
+          },
+          "gnss": {
+            "type": "object",
+            "required": [
+              "value",
+              "source",
+              "validity"
+            ],
+            "properties": {
+              "value": {
+                "type": "object",
+                "nullable": true
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "SIM_TRUTH",
+                  "SIM_MEASUREMENT",
+                  "REAL",
+                  "INTERFACE_TEST",
+                  "UNKNOWN"
+                ]
+              },
+              "validity": {
+                "type": "string",
+                "enum": [
+                  "VALID",
+                  "STALE",
+                  "INVALID",
+                  "NOT_CONNECTED"
+                ]
+              }
+            }
+          },
+          "sensors": {
+            "type": "object"
+          },
+          "task": {
+            "type": "object"
+          },
+          "video": {
+            "type": "object"
+          },
+          "alarms": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "control": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "nullable": true
+              },
+              "selected_source": {
+                "type": "string",
+                "nullable": true
+              },
+              "pending_source": {
+                "type": "string",
+                "nullable": true
+              },
+              "phase": {
+                "type": "string"
+              },
+              "control_epoch": {
+                "type": "string"
+              },
+              "has_control": {
+                "type": "boolean",
+                "nullable": true,
+                "description": "观察请求无法确认租约，当前为null"
+              },
+              "lease_required": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "FleetState": {
+        "type": "object",
+        "required": [
+          "contract_version",
+          "cluster_id",
+          "boot_id",
+          "target_revision",
+          "members",
+          "selection"
+        ],
+        "properties": {
+          "contract_version": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "integer"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceState"
+            }
+          },
+          "selection": {
+            "type": "object",
+            "nullable": true
+          },
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "summary": {
+            "type": "object"
+          }
+        }
+      },
+      "Receipt": {
+        "type": "object",
+        "required": [
+          "phase",
+          "raw_code",
+          "completion_scope"
+        ],
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "device_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string",
+            "nullable": true
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "RECEIVED",
+              "WAITING_NEUTRAL",
+              "WAITING_CONFIRMATION",
+              "EXECUTING",
+              "COMPLETED",
+              "FAILED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED",
+              "TIMED_OUT",
+              "OUTCOME_UNKNOWN",
+              "PARTIAL"
+            ]
+          },
+          "raw_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "completion_scope": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "SERVICE_APPLIED",
+              null
+            ]
+          }
+        }
+      },
+      "Capabilities": {
+        "type": "object"
+      },
+      "Directory": {
+        "type": "object",
+        "required": [
+          "devices",
+          "cluster_id",
+          "target_revision"
+        ],
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error",
+          "error_code",
+          "request_id"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "error_detail": {
+            "type": "object"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "sourceToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "DEVELOPMENT_SOURCE_TOKEN"
+      }
+    }
+  }
+}

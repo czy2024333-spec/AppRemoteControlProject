@@ -1,0 +1,10 @@
+{
+  "python.defaultInterpreterPath": "C:/Users/24107/.workbuddy-ai/binaries/python/envs/rotorpy-day1/Scripts/python.exe",
+  "python.testing.pytestEnabled": false,
+  "python.testing.unittestEnabled": true,
+  "python.testing.unittestArgs": ["-v", "-s", ".", "-p", "test_*.py"],
+  "terminal.integrated.env.windows": {
+    "PYTHONUTF8": "1"
+  },
+  "cmake.sourceDirectory": "C:/Users/24107/workbuddy-ai/APP REMOTE CONTROL PROJECT/rotorpy_day1/cpp"
+}

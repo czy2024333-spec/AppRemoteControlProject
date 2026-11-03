@@ -1,0 +1,92 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "v0.9 三端独立操控与全机观察",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_backend.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": ["--mode","independent","--host","0.0.0.0"]
+    },
+    {
+      "name": "v0.8 统一后端（单机+集群同地址）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_backend.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": ["--mode","unified","--host","0.0.0.0"]
+    },
+    {
+      "name": "v0.7 集群局域网服务",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_backend.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--mode",
+        "cluster",
+        "--host",
+        "0.0.0.0"
+      ]
+    },
+    {
+      "name": "v0.7 单机局域网服务",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_backend.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--mode",
+        "single",
+        "--host",
+        "0.0.0.0"
+      ]
+    },
+    {
+      "name": "v0.7 环境与配置自检",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_backend.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--doctor"
+      ]
+    },
+    {
+      "name": "v0.7 完整自动回归",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_checks.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": []
+    },
+    {
+      "name": "v0.7 三机完整演示",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_cluster_demo.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": [
+        "--seconds",
+        "5"
+      ]
+    },
+    {
+      "name": "v0.7 三来源切换演示",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/run_handover_demo.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "args": []
+    }
+  ]
+}

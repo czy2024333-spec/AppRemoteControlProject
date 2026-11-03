@@ -1,0 +1,21 @@
+{
+  "hardware_acceptance_complete": false,
+  "evidence_type": "NOT_TESTED",
+  "hardware_profile_reviewed": false,
+  "operator": null,
+  "witness": null,
+  "test_date": null,
+  "ring": {
+    "connection": null, "input_receive": null, "direction_mapping": null,
+    "action_confirm": null, "stop": null, "simulation_execute": null,
+    "feedback": null, "source_switch": null, "disconnect_reconnect": null
+  },
+  "voice": {
+    "connection": null, "chinese_recognition": null, "confidence_filter": null,
+    "direction_control": null, "takeoff": null, "land": null, "hover": null,
+    "return_home": null, "stop": null, "dangerous_confirm": null,
+    "simulation_execute": null, "feedback": null, "source_switch": null, "failure_recovery": null
+  },
+  "evidence_files": [],
+  "notes": "每项需填写实物测试结论及证据。模拟报文不能替代硬件验收；当前起飞/降落/返航未支持。"
+}

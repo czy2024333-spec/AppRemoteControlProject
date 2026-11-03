@@ -1,0 +1,37 @@
+# Python 和本机运行记录
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+**/results/
+*.log
+*.db
+
+# 本机凭据和配置；保留明确的公开示例
+.env
+.env.*
+!.env.example
+*.local.json
+local.properties
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+
+# Android / C++ / UE 生成产物
+.gradle/
+.kotlin/
+.idea/
+**/build/
+**/Binaries/
+**/Intermediate/
+**/Saved/
+*.apk
+*.aab
+*.dll
+*.lib
+*.obj
+*.pdb
+*.zip

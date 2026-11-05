@@ -1,0 +1,142 @@
+{
+  "date": "2026-11-05",
+  "base_commit": "352553683e46001f93ce3f7720ebc4dba6fea4ef",
+  "backend_tests": {
+    "passed": 117
+  },
+  "dynamics_tests": {
+    "passed": 26,
+    "skipped": 1
+  },
+  "scale": {
+    "fixture_rows": 100000,
+    "fixture_bytes": 23488890,
+    "bootstrap_ms": 13006.81059999988,
+    "max_export_bytes": 16777216,
+    "measurements": [
+      {
+        "kind": "query_limit_1",
+        "caller_json_decodes": 2,
+        "returned_rows": 1,
+        "size_bytes": null,
+        "error": null,
+        "elapsed_with_tracing_ms": 83.73800000117626,
+        "peak_traced_bytes": 21255
+      },
+      {
+        "kind": "oversized_export",
+        "caller_json_decodes": 1,
+        "returned_rows": null,
+        "size_bytes": null,
+        "error": {
+          "status": 413,
+          "code": "LOG_EXPORT_TOO_LARGE"
+        },
+        "elapsed_with_tracing_ms": 346.87470000062604,
+        "peak_traced_bytes": 33433
+      },
+      {
+        "kind": "filtered_export",
+        "caller_json_decodes": 1,
+        "returned_rows": 10000,
+        "size_bytes": 2180000,
+        "error": null,
+        "elapsed_with_tracing_ms": 45.60469999705674,
+        "peak_traced_bytes": 88319
+      }
+    ],
+    "scope": "独立合成数据；Python分配追踪不包含SQLite原生缓存或手机内存；首次分批建索引耗时单列"
+  },
+  "pressure": {
+    "passed": true,
+    "duration_s": 60,
+    "online_instances": 3,
+    "controlled_instances": 3,
+    "sensor_enabled_instances": 3,
+    "control_ttl_ms": 500,
+    "controls": [
+      {
+        "device_id": "sim-drone-1",
+        "errors": [],
+        "samples": 1187,
+        "p95_ms": 19.844099999318132,
+        "max_ms": 47.73439999917173
+      },
+      {
+        "device_id": "sim-drone-2",
+        "errors": [],
+        "samples": 1187,
+        "p95_ms": 19.9849999989965,
+        "max_ms": 41.59060000165482
+      },
+      {
+        "device_id": "sim-drone-3",
+        "errors": [],
+        "samples": 1188,
+        "p95_ms": 20.74170000196318,
+        "max_ms": 50.87260000073002
+      }
+    ],
+    "observers": [
+      {
+        "client_id": "pilot-1",
+        "samples": 1500,
+        "frames_per_test_second": 25.0,
+        "errors": []
+      },
+      {
+        "client_id": "pilot-2",
+        "samples": 1500,
+        "frames_per_test_second": 25.0,
+        "errors": []
+      },
+      {
+        "client_id": "pilot-3",
+        "samples": 1500,
+        "frames_per_test_second": 25.0,
+        "errors": []
+      },
+      {
+        "client_id": "observer",
+        "samples": 1500,
+        "frames_per_test_second": 25.0,
+        "errors": []
+      }
+    ],
+    "audit_drained": true,
+    "audit": {
+      "healthy": false,
+      "failure": null,
+      "pending": 0,
+      "capacity": 8192,
+      "accepted": 3583,
+      "written": 3583,
+      "rejected": 0,
+      "failed_events_retained": 0,
+      "flush_interval_ms": 100,
+      "durability": "BUFFERED_NO_FSYNC"
+    },
+    "scope": "本机回环60秒：3路操纵、4路SSE、日志查询/导出并发和10万行后台索引；不是手机或4小时验收",
+    "log_operations": [
+      {
+        "kind": "query",
+        "success": 282,
+        "expected_busy_or_building": 1,
+        "errors": [],
+        "bytes": 290106
+      },
+      {
+        "kind": "export",
+        "success": 3,
+        "expected_busy_or_building": 12,
+        "errors": [],
+        "bytes": 7069608
+      }
+    ],
+    "history_rows": 100000
+  },
+  "phone_tested": false,
+  "lan_tested": false,
+  "four_hours_tested": false,
+  "frontend_modified": false
+}

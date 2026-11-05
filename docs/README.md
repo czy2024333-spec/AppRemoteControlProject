@@ -11,3 +11,8 @@
 | 查看已做与待做的验证 | [验证记录说明](validation/README.md) |
 
 当前统一入口是 main 分支的 backend/，协议使用 HTTP + SSE；旧 server/、旧 WebSocket 教程和其他分支的竖直模块均有历史用途，不与当前基线混用。
+
+## 日志功能修复
+
+- [接口、资源上限与错误码](../backend/日志接口与修复说明.md)
+- [本次修复验证](validation/日志修复验证_20261105.md)

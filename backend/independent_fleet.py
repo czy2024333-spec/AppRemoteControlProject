@@ -9,6 +9,7 @@ from async_audit import AsyncAudit
 from cluster_manager import MEMBER_PATHS
 from cluster_member import ManagedMember
 from config_validation import validate_cluster_config
+from logs_query import DEFAULT_LIMIT, MAX_LIMIT, _integer, apply_filters, collect_events, parse_filters, to_csv, to_jsonl
 from runtime_info import IMPLEMENTATION_VERSION, identifier
 from unified_contract import device_descriptor, device_state, snapshot
 
@@ -66,6 +67,8 @@ class IndependentFleet:
         self.identities = validate_credentials(credentials, {s['device_id'] for s in config['members']})
         self.boot_id = uuid.uuid4().hex
         self.members = {}
+        # 审计日志落盘目录；命名避开本类的 directory() 设备目录方法。
+        self.results_directory = Path(directory)
         self.audit = AsyncAudit(Path(directory)/'fleet_events.jsonl')
         try:
             for spec in self.config['members']:
@@ -159,12 +162,13 @@ class IndependentFleet:
             writable_device_ids=[identity['device_id']] if identity['role']=='CONTROLLER' else [],
             capabilities=dict(independent_control=True,cluster_control=False,unified_intent_write=False,
                 device_bound_legacy_write=True,directory=True,unified_state=True,unified_receipts=True,
-                ue_video=False,formal_user_roles=False),
+                ue_video=False,formal_user_roles=False,logs_query=True,logs_export=True),
             control_policy=dict(default_frame='WORLD',axes_order=['X','Y','Z','YAW'],
                 input_ttl_max_ms=500,state_stream_target_hz=25,observe_grants_control=False,
                 source_switch='USER_SWITCH_NEUTRAL',one_session_per_device_source=True,
                 session_replacement='USER_ACTION_STOPS_ONLY_THIS_DEVICE'),
             routes=dict(devices='/api/v1/devices',state='/api/v1/state',events='/api/v1/events',
+                logs='/api/v1/logs',logs_export='/api/v1/logs/export',
                 control_prefix='/api/v1/devices/{device_id}'))
 
     def request(self, identity, name, path, body):
@@ -194,6 +198,31 @@ class IndependentFleet:
     def command_state(self, identity, name, source, command_id):
         self.authorize_write(identity, name)
         return self._service(name).command_state(source,command_id,identity['source'])
+
+    def logs(self, identity, params):
+        # 日志是全机审计证据，观察端同样可读，与 state/events 的共享观察口径一致。
+        filters = parse_filters(params,set(self.members))
+        offset = _integer(params,'offset',0,minimum=0)
+        limit = _integer(params,'limit',DEFAULT_LIMIT,minimum=1,maximum=MAX_LIMIT)
+        events, files = collect_events(self.results_directory,sorted(self.members))
+        matched = apply_filters(events,filters)
+        return dict(contract_version='1.0',events=matched[offset:offset+limit],total=len(matched),
+            offset=offset,limit=limit,filters={k:v for k,v in filters.items() if v is not None},
+            files=files,generated_at_ms=time.time()*1000,
+            viewer=identity['client_id'],viewer_role=identity['role'])
+
+    def logs_export(self, identity, params):
+        fmt = params.get('format') or 'jsonl'
+        if fmt not in ('jsonl','csv'):
+            raise ValueError('format 仅支持 jsonl 或 csv')
+        filters = parse_filters(params,set(self.members))
+        events, _ = collect_events(self.results_directory,sorted(self.members))
+        matched = apply_filters(events,filters)
+        filename = 'fleet-logs-%s.%s' % (time.strftime('%Y%m%d-%H%M%S'),fmt)
+        content = to_csv(matched) if fmt=='csv' else to_jsonl(matched)
+        return dict(filename=filename,format=fmt,content=content,total=len(matched),
+            filters={k:v for k,v in filters.items() if v is not None},
+            generated_at_ms=time.time()*1000,viewer=identity['client_id'])
 
     def health(self):
         members = [service.health() for service in self.members.values()]

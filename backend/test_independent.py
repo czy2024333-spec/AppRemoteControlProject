@@ -306,5 +306,139 @@ class IndependentTests(unittest.TestCase):
             connection.close()
 
 
+class LogsQueryTests(unittest.TestCase):
+    """日志查询与导出接口：过滤、分页、导出内容与权限边界。"""
+
+    def setUp(self):
+        self.directory = temporary_directory()
+        self.config = json.loads(Path('cluster_config.json').read_text('utf-8'))
+        self.credentials = json.loads(Path('independent_credentials.json').read_text('utf-8'))
+        self.fleet = IndependentFleet(self.config,self.credentials,self.directory.name)
+        self.server = make_independent_server(self.fleet,port=0)
+        self.thread = threading.Thread(target=lambda:self.server.serve_forever(poll_interval=.02),daemon=True)
+        self.thread.start()
+
+    def tearDown(self):
+        self.server.shutdown(); self.server.server_close(); self.fleet.close()
+        self.directory.cleanup()
+
+    def request(self, path, body=None, index=3, raw=False):
+        connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=5)
+        try:
+            headers = {'Authorization':'Bearer '+self.credentials['credentials'][index]['token'],
+                'Content-Type':'application/json'}
+            connection.request('GET' if body is None else 'POST',path,
+                None if body is None else json.dumps(body).encode(),headers)
+            response = connection.getresponse()
+            payload = response.read()
+            if raw:
+                return response.status,payload,response.headers
+            return response.status,json.loads(payload)
+        finally:
+            connection.close()
+
+    def wait_for_events(self, minimum):
+        # 审计异步落盘（约100ms刷新一次），轮询等待，避免时序抖动造成假失败。
+        deadline = time.time()+3
+        last = None
+        while time.time() < deadline:
+            code, result = self.request('/api/v1/logs')
+            if code==200 and result['data']['total'] >= minimum:
+                return result['data']
+            last = (code,result); time.sleep(.05)
+        self.fail('审计事件超时未落盘: 期望至少%d, 实际=%s' % (minimum,last))
+
+    def test_all_viewers_can_query_and_startup_events_are_visible(self):
+        baseline = self.wait_for_events(3)
+        for index in range(4):
+            code, result = self.request('/api/v1/logs',index=index)
+            self.assertEqual(code,200,result)
+            self.assertEqual(result['data']['total'],baseline['total'])
+        events = baseline['events']
+        self.assertEqual(len(events),min(baseline['limit'],baseline['total']))
+        self.assertTrue(all(row['event']=='MEMBER_STARTED' for row in events))
+        self.assertTrue(all('server_time_ms' in row and 'device_id' in row for row in events))
+        files = baseline['files']
+        self.assertTrue(any(row['file']=='fleet_events.jsonl' for row in files))
+        # 路由须向所有端广播，前端按 capabilities 发现入口。
+        code, result = self.request('/api/v1/capabilities',index=3)
+        self.assertEqual(code,200,result)
+        routes = result['data']['routes']
+        self.assertEqual(routes['logs'],'/api/v1/logs')
+        self.assertEqual(routes['logs_export'],'/api/v1/logs/export')
+        self.assertTrue(result['data']['capabilities']['logs_query'])
+
+    def test_device_event_and_time_filters_match_only_requested_rows(self):
+        now = int(time.time()*1000)
+        self.fleet.audit.emit(dict(event='COMMAND_ACK',device_id='sim-drone-2',path='/api/input',
+            sequence=1,command_id='c1',server_time_ms=now))
+        self.fleet.audit.emit(dict(event='COMMAND_ACK',device_id='sim-drone-1',path='/api/input',
+            sequence=2,command_id='c2',server_time_ms=now+1))
+        self.wait_for_events(5)
+        code, result = self.request('/api/v1/logs?device_id=sim-drone-2')
+        self.assertEqual(code,200,result)
+        self.assertTrue(all(row.get('device_id')=='sim-drone-2' for row in result['data']['events']))
+        code, result = self.request('/api/v1/logs?event=COMMAND_ACK')
+        self.assertEqual(code,200,result)
+        self.assertEqual(result['data']['total'],2)
+        self.assertTrue(all(row['event']=='COMMAND_ACK' for row in result['data']['events']))
+        code, result = self.request('/api/v1/logs?event=COMMAND_ACK&since_ms=%d&until_ms=%d' % (now,now))
+        self.assertEqual(code,200,result)
+        self.assertEqual(result['data']['total'],1)
+        self.assertEqual(result['data']['events'][0]['command_id'],'c1')
+
+    def test_pagination_offset_limit_and_cap(self):
+        baseline = self.wait_for_events(3)
+        code, result = self.request('/api/v1/logs?limit=2&offset=1')
+        self.assertEqual(code,200,result)
+        data = result['data']
+        self.assertEqual(data['limit'],2); self.assertEqual(data['offset'],1)
+        self.assertEqual(data['total'],baseline['total'])
+        self.assertEqual([row['device_id'] for row in data['events']],
+            [row['device_id'] for row in baseline['events'][1:3]])
+        code, result = self.request('/api/v1/logs?limit=99999')
+        self.assertEqual(code,200,result)
+        self.assertEqual(result['data']['limit'],2000)
+        code, result = self.request('/api/v1/logs?offset=9999')
+        self.assertEqual(code,200,result)
+        self.assertEqual(result['data']['events'],[])
+
+    def test_unknown_device_and_bad_numbers_are_rejected(self):
+        for path in ('/api/v1/logs?device_id=unknown','/api/v1/logs?limit=abc',
+                '/api/v1/logs?since_ms=-5','/api/v1/logs?since_ms=200&until_ms=100'):
+            code, result = self.request(path)
+            self.assertEqual(code,400,(path,result))
+            self.assertEqual(result['error_code'],'INVALID_ARGUMENT')
+
+    def test_export_jsonl_and_csv_attachments_and_content(self):
+        total = self.wait_for_events(3)['total']
+        code, payload, headers = self.request('/api/v1/logs/export',raw=True)
+        self.assertEqual(code,200,payload[:200])
+        self.assertEqual(headers.get('Content-Type'),'application/x-ndjson; charset=utf-8')
+        self.assertIn('attachment;',headers.get('Content-Disposition',''))
+        self.assertIn('.jsonl',headers.get('Content-Disposition'))
+        lines = [row for row in payload.decode('utf-8').splitlines() if row.strip()]
+        self.assertEqual(len(lines),total)
+        self.assertTrue(all(json.loads(row)['event']=='MEMBER_STARTED' for row in lines))
+        code, payload, headers = self.request('/api/v1/logs/export?format=csv',raw=True)
+        self.assertEqual(code,200,payload[:200])
+        self.assertEqual(headers.get('Content-Type'),'text/csv; charset=utf-8')
+        text = payload.decode('utf-8')
+        self.assertTrue(text.startswith(chr(0xfeff)))
+        rows = [row for row in text.splitlines() if row.strip()]
+        self.assertEqual(len(rows),total+1)
+        self.assertIn('server_time_ms',rows[0]); self.assertIn('detail',rows[0])
+        code, result = self.request('/api/v1/logs/export?format=xml')
+        self.assertEqual(code,400,result)
+        self.assertEqual(result['error_code'],'INVALID_ARGUMENT')
+
+    def test_write_to_logs_route_is_rejected_for_all_roles(self):
+        code, result = self.request('/api/v1/logs',body={'query':1},index=3)
+        self.assertEqual(code,403,result)
+        self.assertEqual(result['error_code'],'READ_ONLY')
+        code, result = self.request('/api/v1/logs',body={'query':1},index=0)
+        self.assertEqual(code,404,result)
+
+
 if __name__=='__main__':
     unittest.main(verbosity=2)

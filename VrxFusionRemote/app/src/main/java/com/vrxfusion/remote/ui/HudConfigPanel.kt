@@ -52,6 +52,10 @@ fun HudConfigPanel(vm: MainViewModel) {
             OutlinedButton(onClick={ importer.launch(arrayOf("application/json","text/plain","application/octet-stream")) },modifier=Modifier.weight(1f)) { Text("导入配置") }
             OutlinedButton(onClick={ exporter.launch("flight-display.json") },modifier=Modifier.weight(1f)) { Text("导出配置") }
         }
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            // 恢复默认前自动保存回退点，误触可立即回退。
+            OutlinedButton(onClick=vm::resetHudDefaults,modifier=Modifier.weight(1f)) { Text("恢复默认") }
+        }
         Text(message.ifEmpty { "仅包含显示字段；停止、保护和告警始终保留。" },color=TextSecondary,fontSize=11.sp)
     }
 }

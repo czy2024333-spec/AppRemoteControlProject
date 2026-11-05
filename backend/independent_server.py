@@ -6,7 +6,7 @@ from pathlib import Path
 import socket
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from app_server import APIError
 from http_transport import JsonHandler, TransportError, strict_loads, validate_origins
 from independent_fleet import IndependentFleet
@@ -58,6 +58,21 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
             except (OSError,APIError):
                 pass
 
+        def export_logs(self, identity, query):
+            # 导出是文件下载而非JSON应答；流式内容已在fleet侧生成，文件名仅含ASCII时间戳。
+            export = fleet.logs_export(identity,query)
+            payload = export['content'].encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type',
+                'text/csv; charset=utf-8' if export['format']=='csv' else 'application/x-ndjson; charset=utf-8')
+            self.send_header('Content-Length',str(len(payload)))
+            self.send_header('Cache-Control','no-store')
+            self.send_header('Content-Disposition','attachment; filename="%s"' % export['filename'])
+            if self.close_connection:
+                self.send_header('Connection','close')
+            self.end_headers()
+            self.wfile.write(payload)
+
         def dispatch(self, post=False):
             body = None
             name = None
@@ -82,6 +97,12 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                     data = fleet.state(identity)
                 elif not post and path == '/api/v1/events':
                     return self.stream(identity)
+                elif not post and path == '/api/v1/logs':
+                    query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
+                    data = fleet.logs(identity,query)
+                elif not post and path == '/api/v1/logs/export':
+                    query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
+                    return self.export_logs(identity,query)
                 elif parts[:3] == ['api','v1','devices'] and len(parts)>=5:
                     name = identifier(parts[3])
                     action = parts[4]

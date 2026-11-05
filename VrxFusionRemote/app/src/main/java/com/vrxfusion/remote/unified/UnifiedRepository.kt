@@ -119,6 +119,11 @@ class UnifiedRepository {
         running.value=false; connected.value=false; receiveHz.value=0.0
         lastIdentity=""; identities=emptyMap(); memberAt=emptyMap(); rate.reset()
     }
+    /** 服务端审计日志：一次性只读请求，观察端同样可读；导出为文件下载，与连接会话无关。 */
+    suspend fun queryLogs(url: String,token: String,query: String): JsonObject =
+        withContext(Dispatchers.IO) { wire.get(url.trim().trimEnd('/'),token,"/api/v1/logs"+query) }
+    suspend fun downloadLogs(url: String,token: String,format: String): ByteArray =
+        withContext(Dispatchers.IO) { wire.download(url.trim().trimEnd('/'),token,"/api/v1/logs/export?format="+format) }
     private fun message(e: Exception)=if (e is HttpRejection && e.code==404)
         "接口不匹配：请启动v0.9 --mode independent（旧版可用 --mode unified）" else explainConnection(e)
 }

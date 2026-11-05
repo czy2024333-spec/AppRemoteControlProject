@@ -651,6 +651,20 @@ class BackendWire {
     }
     fun stream(url: String,token: String,path: String): Call=streaming.newCall(Request.Builder().url(url+path)
         .header("Authorization","Bearer $token").header("Accept","text/event-stream").build())
+    // 日志导出是文件下载（非JSON应答），读超时放宽；32MB上限防止移动端内存失控。
+    private val downloading=http.newBuilder().readTimeout(30,TimeUnit.SECONDS).callTimeout(0,TimeUnit.MILLISECONDS).build()
+    fun download(url: String,token: String,path: String,maxBytes: Long=32L*1024*1024): ByteArray {
+        val call=downloading.newCall(Request.Builder().url(url+path).header("Authorization","Bearer $token").build())
+        return call.execute().use { r ->
+            val bytes=r.body?.bytes() ?: ByteArray(0)
+            if (!r.isSuccessful) {
+                val detail=runCatching { json.parseToJsonElement(bytes.decodeToString()).jsonObject }.getOrNull()
+                throw HttpRejection(r.code,detail?.get("error")?.jsonPrimitive?.content ?: "HTTP ${r.code}",
+                    detail?.get("error_code")?.jsonPrimitive?.contentOrNull)
+            }
+            require(bytes.size<=maxBytes) { "导出文件超过${maxBytes/(1024*1024)}MB上限" }
+            bytes }
+    }
     fun readStream(call: Call,receive: (String)->Unit) {
         call.execute().use { r ->
             if (!r.isSuccessful) throw HttpRejection(r.code,"状态订阅失败 HTTP ${r.code}")

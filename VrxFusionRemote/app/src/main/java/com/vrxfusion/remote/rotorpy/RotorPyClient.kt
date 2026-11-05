@@ -652,7 +652,10 @@ class BackendWire {
     fun stream(url: String,token: String,path: String): Call=streaming.newCall(Request.Builder().url(url+path)
         .header("Authorization","Bearer $token").header("Accept","text/event-stream").build())
     // 日志导出是文件下载（非JSON应答），读超时放宽；32MB上限防止移动端内存失控。
-    private val downloading=http.newBuilder().readTimeout(30,TimeUnit.SECONDS).callTimeout(0,TimeUnit.MILLISECONDS).build()
+    // 必须允许重连：后端会主动关闭空闲keep-alive连接，复用旧连接会直接EOF（unexpected end of stream），
+    // 而基础客户端retryOnConnectionFailure=false，不重试就会把一次过期连接当成导出失败。
+    private val downloading=http.newBuilder().retryOnConnectionFailure(true)
+        .readTimeout(30,TimeUnit.SECONDS).callTimeout(0,TimeUnit.MILLISECONDS).build()
     fun download(url: String,token: String,path: String,maxBytes: Long=32L*1024*1024): ByteArray {
         val call=downloading.newCall(Request.Builder().url(url+path).header("Authorization","Bearer $token").build())
         return call.execute().use { r ->

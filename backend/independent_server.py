@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlsplit
 from app_server import APIError
 from http_transport import JsonHandler, TransportError, strict_loads, validate_origins
 from independent_fleet import IndependentFleet
+from logs_query import LogError
 from runtime_info import identifier
 from unified_contract import error_detail, receipt
 
@@ -59,23 +60,34 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 pass
 
         def export_logs(self, identity, query):
-            # 导出是文件下载而非JSON应答；流式内容已在fleet侧生成，文件名仅含ASCII时间戳。
-            export = fleet.logs_export(identity,query)
-            payload = export['content'].encode('utf-8')
-            self.send_response(200)
-            self.send_header('Content-Type',
-                'text/csv; charset=utf-8' if export['format']=='csv' else 'application/x-ndjson; charset=utf-8')
-            self.send_header('Content-Length',str(len(payload)))
-            self.send_header('Cache-Control','no-store')
-            self.send_header('Content-Disposition','attachment; filename="%s"' % export['filename'])
-            if self.close_connection:
-                self.send_header('Connection','close')
-            self.end_headers()
-            self.wfile.write(payload)
+            # 先完成有界快照文件，再发200；失败不会留下“成功但0字节”的下载。
+            with fleet.logs_export(identity,query) as export:
+                self.send_response(200)
+                self.send_header('Content-Type',
+                    'text/csv; charset=utf-8' if export['format']=='csv' else 'application/x-ndjson; charset=utf-8')
+                self.send_header('Content-Length',str(export['size']))
+                self.send_header('Cache-Control','no-store')
+                self.send_header('Content-Disposition','attachment; filename="%s"' % export['filename'])
+                self.send_header('X-Log-Snapshot',export['snapshot'])
+                self.send_header('X-Log-Rows',str(export['total']))
+                self.send_header('X-Log-Pending-Tail',str(export['pending_tail']))
+                if self.close_connection:
+                    self.send_header('Connection','close')
+                self.end_headers()
+                self._log_response_started=True
+                download_deadline=time.monotonic()+30
+                while True:
+                    if time.monotonic()>download_deadline:
+                        raise OSError('日志下载超过30秒预算')
+                    block=export['file'].read(64*1024)
+                    if not block:
+                        break
+                    self.wfile.write(block)
 
         def dispatch(self, post=False):
             body = None
             name = None
+            self._log_response_started=False
             try:
                 self.validate_origin()
                 identity = fleet.authenticate(self.headers.get('Authorization',''))
@@ -137,7 +149,10 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 if post:
                     response['receipt'] = receipt(data,name,body.get('command_id'),identity['source'])
                 self.reply(200,response)
-            except (APIError,TransportError) as exc:
+            except (APIError,TransportError,LogError) as exc:
+                if self._log_response_started:
+                    self.close_connection=True
+                    return
                 if post:
                     self.close_connection = True
                 self.reply(exc.status,dict(ok=False,error=exc.message,error_code=exc.code,

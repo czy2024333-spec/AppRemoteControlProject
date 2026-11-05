@@ -8,7 +8,7 @@ import sys
 def main():
     root=Path(__file__).resolve().parent
     logs=root/'results/checks';logs.mkdir(parents=True,exist_ok=True)
-    cases=[('backend',root,['test_independent','test_unified','test_upgrade','test_cluster','test_boundary','test_ctl','test_inputs']),
+    cases=[('backend',root,['test_logs_bounds','test_independent','test_unified','test_upgrade','test_cluster','test_boundary','test_ctl','test_inputs']),
            ('dynamics',root/'core',['test_core','test_core_3d','test_environment','test_lab'])]
     ok=True
     for name,directory,modules in cases:

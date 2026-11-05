@@ -30,6 +30,10 @@ python run_backend.py --mode independent --host 0.0.0.0 --port 8765
 | core/cpp/、core/ue/ | C++ 核心与历史 UE 桥接源码；无预编译 DLL |
 | core/vendor/ | 固定官方阅读源码与许可证 |
 
+## 日志修复（2026-11-05）
+
+当前分支的日志接口使用后台分批索引、快照分页和有界文件导出，详见 [日志接口与修复说明](日志接口与修复说明.md)。首次历史索引或繁忙时返回明确503；损坏行可定位，默认拒绝不完整导出。
+
 ## 对接文档
 
 - [当前三机接口](前端对接_三机独立操控.md) · [OpenAPI](openapi_independent.json)

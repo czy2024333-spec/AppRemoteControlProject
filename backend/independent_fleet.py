@@ -9,7 +9,7 @@ from async_audit import AsyncAudit
 from cluster_manager import MEMBER_PATHS
 from cluster_member import ManagedMember
 from config_validation import validate_cluster_config
-from logs_query import DEFAULT_LIMIT, MAX_LIMIT, _integer, apply_filters, collect_events, parse_filters, to_csv, to_jsonl
+from logs_query import LogIndex
 from runtime_info import IMPLEMENTATION_VERSION, identifier
 from unified_contract import device_descriptor, device_state, snapshot
 
@@ -70,6 +70,7 @@ class IndependentFleet:
         # 审计日志落盘目录；命名避开本类的 directory() 设备目录方法。
         self.results_directory = Path(directory)
         self.audit = AsyncAudit(Path(directory)/'fleet_events.jsonl')
+        self.logs_index = LogIndex(self.results_directory,sorted(s['device_id'] for s in self.config['members']))
         try:
             for spec in self.config['members']:
                 name = spec['device_id']
@@ -85,6 +86,7 @@ class IndependentFleet:
     def close(self):
         for service in self.members.values():
             service.close()
+        self.logs_index.close()
         return self.audit.close()
 
     def authenticate(self, header):
@@ -201,31 +203,16 @@ class IndependentFleet:
 
     def logs(self, identity, params):
         # 日志是全机审计证据，观察端同样可读，与 state/events 的共享观察口径一致。
-        filters = parse_filters(params,set(self.members))
-        offset = _integer(params,'offset',0,minimum=0)
-        limit = _integer(params,'limit',DEFAULT_LIMIT,minimum=1,maximum=MAX_LIMIT)
-        events, files = collect_events(self.results_directory,sorted(self.members))
-        matched = apply_filters(events,filters)
-        return dict(contract_version='1.0',events=matched[offset:offset+limit],total=len(matched),
-            offset=offset,limit=limit,filters={k:v for k,v in filters.items() if v is not None},
-            files=files,generated_at_ms=time.time()*1000,
-            viewer=identity['client_id'],viewer_role=identity['role'])
+        result = self.logs_index.query(params,set(self.members))
+        result.update(viewer=identity['client_id'],viewer_role=identity['role'])
+        return result
 
     def logs_export(self, identity, params):
-        fmt = params.get('format') or 'jsonl'
-        if fmt not in ('jsonl','csv'):
-            raise ValueError('format 仅支持 jsonl 或 csv')
-        filters = parse_filters(params,set(self.members))
-        events, _ = collect_events(self.results_directory,sorted(self.members))
-        matched = apply_filters(events,filters)
-        filename = 'fleet-logs-%s.%s' % (time.strftime('%Y%m%d-%H%M%S'),fmt)
-        content = to_csv(matched) if fmt=='csv' else to_jsonl(matched)
-        return dict(filename=filename,format=fmt,content=content,total=len(matched),
-            filters={k:v for k,v in filters.items() if v is not None},
-            generated_at_ms=time.time()*1000,viewer=identity['client_id'])
+        return self.logs_index.export(params,set(self.members))
 
     def health(self):
         members = [service.health() for service in self.members.values()]
         audit = self.audit.status()
         return dict(mode='independent',implementation_version=IMPLEMENTATION_VERSION,
-            healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit)
+            healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit,
+            logs_index=self.logs_index.status())

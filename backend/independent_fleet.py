@@ -9,6 +9,7 @@ from async_audit import AsyncAudit
 from cluster_manager import MEMBER_PATHS
 from cluster_member import ManagedMember
 from config_validation import validate_cluster_config
+from logs_query import LogIndex
 from runtime_info import IMPLEMENTATION_VERSION, identifier
 from unified_contract import device_descriptor, device_state, snapshot
 
@@ -66,7 +67,10 @@ class IndependentFleet:
         self.identities = validate_credentials(credentials, {s['device_id'] for s in config['members']})
         self.boot_id = uuid.uuid4().hex
         self.members = {}
+        # 审计日志落盘目录；命名避开本类的 directory() 设备目录方法。
+        self.results_directory = Path(directory)
         self.audit = AsyncAudit(Path(directory)/'fleet_events.jsonl')
+        self.logs_index = LogIndex(self.results_directory,sorted(s['device_id'] for s in self.config['members']))
         try:
             for spec in self.config['members']:
                 name = spec['device_id']
@@ -82,6 +86,7 @@ class IndependentFleet:
     def close(self):
         for service in self.members.values():
             service.close()
+        self.logs_index.close()
         return self.audit.close()
 
     def authenticate(self, header):
@@ -159,12 +164,13 @@ class IndependentFleet:
             writable_device_ids=[identity['device_id']] if identity['role']=='CONTROLLER' else [],
             capabilities=dict(independent_control=True,cluster_control=False,unified_intent_write=False,
                 device_bound_legacy_write=True,directory=True,unified_state=True,unified_receipts=True,
-                ue_video=False,formal_user_roles=False),
+                ue_video=False,formal_user_roles=False,logs_query=True,logs_export=True),
             control_policy=dict(default_frame='WORLD',axes_order=['X','Y','Z','YAW'],
                 input_ttl_max_ms=500,state_stream_target_hz=25,observe_grants_control=False,
                 source_switch='USER_SWITCH_NEUTRAL',one_session_per_device_source=True,
                 session_replacement='USER_ACTION_STOPS_ONLY_THIS_DEVICE'),
             routes=dict(devices='/api/v1/devices',state='/api/v1/state',events='/api/v1/events',
+                logs='/api/v1/logs',logs_export='/api/v1/logs/export',
                 control_prefix='/api/v1/devices/{device_id}'))
 
     def request(self, identity, name, path, body):
@@ -195,8 +201,18 @@ class IndependentFleet:
         self.authorize_write(identity, name)
         return self._service(name).command_state(source,command_id,identity['source'])
 
+    def logs(self, identity, params):
+        # 日志是全机审计证据，观察端同样可读，与 state/events 的共享观察口径一致。
+        result = self.logs_index.query(params,set(self.members))
+        result.update(viewer=identity['client_id'],viewer_role=identity['role'])
+        return result
+
+    def logs_export(self, identity, params):
+        return self.logs_index.export(params,set(self.members))
+
     def health(self):
         members = [service.health() for service in self.members.values()]
         audit = self.audit.status()
         return dict(mode='independent',implementation_version=IMPLEMENTATION_VERSION,
-            healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit)
+            healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit,
+            logs_index=self.logs_index.status())

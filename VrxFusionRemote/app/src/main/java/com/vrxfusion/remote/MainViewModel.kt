@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * 主 ViewModel：登录角色、服务连接、设备目录、控制会话（MVVM）。
@@ -43,6 +45,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun rollbackHud() { runCatching { _hudPreferences.value=hudStore.rollback() }
         .onSuccess { hudRevision.value=hudStore.revision(); hudConfigMessage.value="已回退显示配置" }
         .onFailure { hudConfigMessage.value="回退失败：${it.message}" } }
+    /** 恢复出厂显示配置：先自动存回退点，误操作可立即回退。 */
+    fun resetHudDefaults() {
+        hudStore.checkpoint(); hudCheckpoint.value=true
+        setHudPreferences(com.vrxfusion.remote.ui.HudPreferences())
+        hudConfigMessage.value="已恢复默认显示配置，原配置已保存为回退点"
+    }
     fun importHud(text: String) {
         // 先完整校验再保存，失败不能破坏当前配置；导入前保留回退点。
         runCatching { com.vrxfusion.remote.ui.HudConfigCodec.decode(text) }
@@ -217,6 +225,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             flightGateway.connect(_rotorBaseUrl.value,_rotorToken.value,false)
         }
     }
+
+    // ---- 服务端审计日志（11/19 功能扩展：查询与导出，观察端同样可读） ----
+    private val _logsSummary = MutableStateFlow<String?>(null)
+    val logsSummary: StateFlow<String?> = _logsSummary
+
+    /** 查询服务端审计日志概况；结果或失败原因写入 logsSummary。 */
+    fun refreshServerLogsSummary() {
+        viewModelScope.launch {
+            _logsSummary.value = runCatching {
+                val data = flightGateway.repository.queryLogs(_rotorBaseUrl.value,_rotorToken.value,"?limit=5")["data"]!!.jsonObject
+                val total = data["total"]?.jsonPrimitive?.content ?: "?"
+                "服务端审计日志共 $total 条（可按设备/事件/时间过滤；导出为全部匹配内容）"
+            }.getOrElse { "服务端日志查询失败：${it.message}" }
+        }
+    }
+
+    /** 导出服务端审计日志为文件字节，由页面用 SAF 保存；失败返回 null 并写提示。 */
+    suspend fun exportServerLogs(format: String): ByteArray? = runCatching {
+        flightGateway.repository.downloadLogs(_rotorBaseUrl.value,_rotorToken.value,format)
+    }.onFailure { _logsSummary.value="服务端日志导出失败：${it.message}" }.getOrNull()
 
     /** 离开控制区域/进入后台立即停流；后台上报由ViewModel执行，不依赖已销毁页面的协程。 */
     fun pauseRotor() {

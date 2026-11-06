@@ -46,6 +46,26 @@ fun DiagnosticsPanel(vm: MainViewModel) {
                 modifier=Modifier.weight(1f)) { Text(if (state.active) "结束记录" else "开始记录") }
             OutlinedButton(onClick={ exporter.launch("flight-diagnostics.jsonl") },modifier=Modifier.weight(1f)) { Text("导出记录") }
         }
+        HorizontalDivider()
+        Text("服务端审计日志",color=TextPrimary,fontSize=16.sp)
+        Text("服务器落盘的全机事件（指令回执、状态转换与成员启停）；只读，观察端同样可查询导出",color=TextSecondary,fontSize=11.sp)
+        val logsSummary by vm.logsSummary.collectAsState()
+        var serverFormat by remember { mutableStateOf("jsonl") }
+        val serverExporter=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+            if (uri!=null) scope.launch {
+                runCatching { withContext(Dispatchers.IO) {
+                    val bytes=vm.exportServerLogs(serverFormat) ?: error("服务端日志导出失败")
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入")
+                } }.onSuccess { exportMessage="服务端审计日志已导出（${serverFormat.uppercase()}）" }
+                    .onFailure { exportMessage=it.message ?: "服务端日志导出失败" }
+            }
+        }
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick={ vm.refreshServerLogsSummary() },modifier=Modifier.weight(1f)) { Text("查询服务端日志") }
+            OutlinedButton(onClick={ serverFormat="jsonl"; serverExporter.launch("fleet-logs.jsonl") },modifier=Modifier.weight(1f)) { Text("导出JSONL") }
+            OutlinedButton(onClick={ serverFormat="csv"; serverExporter.launch("fleet-logs.csv") },modifier=Modifier.weight(1f)) { Text("导出CSV") }
+        }
+        logsSummary?.let { Text(it,color=AccentBlue,fontSize=11.sp) }
         Text(state.note,color=WarnAmber,fontSize=11.sp)
         Text("P95包含运动指令等待发送锁的时间，按1ms上取整；仅成功回执统计，失败另计。APP提交频率与接收频率分别计算，非屏幕GPU呈现帧率。语音识别、模型执行及视频时延待各端独立计时。",color=TextSecondary,fontSize=10.sp)
         if (exportMessage.isNotEmpty()) Text(exportMessage,color=AccentBlue,fontSize=11.sp)

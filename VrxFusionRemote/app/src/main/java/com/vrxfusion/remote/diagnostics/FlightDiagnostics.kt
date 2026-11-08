@@ -78,7 +78,7 @@ class FlightDiagnostics(private val context: Context,private val scope: Coroutin
         }
         view.value=DiagnosticView(active=true,note="正在记录；4小时验收需结合手机、服务端及仿真日志审核")
         emit(buildJsonObject {
-            put("type","start"); put("app_version","0.9.0"); put("time_utc_ms",System.currentTimeMillis())
+            put("type","start"); put("app_version","0.9.3"); put("time_utc_ms",System.currentTimeMillis())
             put("terminal","${Build.MANUFACTURER} ${Build.MODEL}"); put("android_api",Build.VERSION.SDK_INT)
             put("screen_px","${context.resources.displayMetrics.widthPixels}x${context.resources.displayMetrics.heightPixels}")
             put("conditions",conditions.take(300)); put("baseline_successes",c.performance.snapshot().successes)

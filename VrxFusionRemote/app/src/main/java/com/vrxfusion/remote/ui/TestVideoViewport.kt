@@ -17,14 +17,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -37,22 +34,16 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** 两种摄像头只替代视频底层，不产生飞行状态，也不访问控制接口。 */
 @Composable
-fun TestVideoViewport(source: VideoSource,settings: VideoSettings,code: String,onStatus: (String)->Unit) {
-    var message by remember { mutableStateOf<String?>(if (source==VideoSource.NONE) null else "正在开启${source.label}…") }
+fun TestVideoViewport(source: VideoSource,settings: VideoSettings,code: String,onStatus: (String,Boolean)->Unit) {
     val currentStatus by rememberUpdatedState(onStatus)
-    fun status(text: String,failed: Boolean=false) { message=if (failed) text else null; currentStatus(text) }
-    Box(Modifier.fillMaxSize().background(Color(0xFF08121F))) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF141B24),Color(0xFF0D131B))))) {
         when(source) {
-            VideoSource.NONE -> UeViewport()
-            VideoSource.PHONE -> PhoneVideoPreview(settings.frontCamera,{ status("手机摄像头预览中 · 测试画面") },{ status(it,true) })
-            VideoSource.PC -> PcVideoPreview(settings.pcUrl,code,{ status("电脑摄像头画面播放中 · 测试画面") },{ status(it,true) })
+            VideoSource.NONE -> Unit
+            VideoSource.PHONE -> PhoneVideoPreview(settings.frontCamera,
+                { currentStatus("手机摄像头预览中 · 测试画面",false) },{ currentStatus(it,true) })
+            VideoSource.PC -> PcVideoPreview(settings.pcUrl,code,
+                { currentStatus("电脑摄像头画面播放中 · 测试画面",false) },{ currentStatus(it,true) })
         }
-        message?.let { text -> Box(Modifier.fillMaxSize().background(Color(0xCC08121F)),contentAlignment=Alignment.Center) {
-            Column(Modifier.padding(horizontal=96.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                Text(text,color=Color.White,fontSize=13.sp)
-                Text("画面测试独立于飞行控制",color=Color(0xFF9AA7B4),fontSize=11.sp)
-            }
-        } }
     }
 }
 

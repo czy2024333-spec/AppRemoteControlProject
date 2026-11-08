@@ -35,8 +35,18 @@ class VideoUiTest {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE))
             val source=mutableStateOf(VideoSource.PC); val status=mutableStateOf("")
-            rule.setContent { VrxTheme { TestVideoViewport(source.value,
-                VideoSettings(VideoSource.PC,server.url("/video").toString()),"camera-code-2026-abc",{status.value=it}) } }
+            val viewportMessage=mutableStateOf<String?>("正在开启电脑摄像头…")
+            val notice=flightNotice(null,false,false,false,LinkPhase.DISCONNECTED,false,false,true,null)
+            rule.setContent { VrxTheme {
+                FlightCockpit(null,emptyList(),notice,false,true,0.0,false,false,
+                    viewportStatus=viewportMessage.value,ueContent={
+                        TestVideoViewport(source.value,VideoSettings(VideoSource.PC,server.url("/video").toString()),
+                            "camera-code-2026-abc") { text,failed ->
+                            status.value=text
+                            viewportMessage.value=text.takeIf { failed }
+                        }
+                    })
+            } }
             try {
                 rule.waitUntil(3000) { server.requestCount>0 }
                 // 同时推进Robolectric系统时钟并派发主线程队列，模拟完整帧连续缺失。
@@ -47,7 +57,8 @@ class VideoUiTest {
                 }
                 rule.waitForIdle()
                 assertTrue(status.value,status.value.contains("超过3秒未更新"))
-                rule.onNodeWithText("电脑画面超过3秒未更新，请检查视频源后重新启用").assertIsDisplayed()
+                rule.onNode(hasTestTag("video-viewport-status") and hasText("电脑画面超过3秒未更新，请检查视频源后重新启用"))
+                    .assertIsDisplayed()
             } finally { rule.runOnIdle { source.value=VideoSource.NONE }; rule.waitForIdle() }
         }
     }
@@ -110,7 +121,9 @@ class VideoUiTest {
             rule.setContent { VrxTheme { FlightCockpit(state,emptyList(),notice,true,true,25.0,true,true,
                 onStop={ stopClicks++ },
                 videoLabel="电脑摄像头（测试图）",ueContent={ TestVideoViewport(source.value,
-                    VideoSettings(VideoSource.PC,server.url("/video").toString()),"camera-code-2026-abc",{status.value=it}) }) } }
+                    VideoSettings(VideoSource.PC,server.url("/video").toString()),"camera-code-2026-abc") { text,_ ->
+                    status.value=text
+                } }) } }
             try {
                 try { rule.waitUntil(6000) {
                     org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
@@ -136,7 +149,7 @@ class VideoUiTest {
             VideoSettingsPanel(VideoSettings(),"",VideoSource.NONE,"未启用测试画面",{},{},{},{})
         }) {} } }
         rule.onNodeWithText("显示布局").assertIsDisplayed()
-        rule.onNodeWithText("连接服务").assertIsDisplayed()
+        rule.onNodeWithText("连接状态").assertIsDisplayed()
         rule.onAllNodesWithText("画面测试")[0].assertIsDisplayed()
         rule.onNodeWithTag("settings-done").assertIsDisplayed()
         save("settings-video-phone-landscape")

@@ -2,8 +2,12 @@ package com.vrxfusion.remote.ui
 
 import android.app.Activity
 import android.view.ViewTreeObserver
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +19,12 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+
+/** 操纵页顶部按应用间距布局，状态栏显隐时只覆盖画面。导航栏和屏幕缺口保留安全边距。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun flightSafeInsets(): WindowInsets =
+    WindowInsets.navigationBarsIgnoringVisibility.union(WindowInsets.displayCutout)
 
 /** 页面、窗口焦点和前后台恢复时保持全屏；不申请系统悬浮窗权限。 */
 @Composable
@@ -34,6 +44,11 @@ fun FlightImmersiveMode(activity: Activity?) {
         val hadStatus=insets?.isVisible(WindowInsetsCompat.Type.statusBars()) ?: true
         val hadNavigation=insets?.isVisible(WindowInsetsCompat.Type.navigationBars()) ?: true
         val behavior=controller?.systemBarsBehavior
+        val darkStatusIcons=controller?.isAppearanceLightStatusBars
+        val darkNavigationIcons=controller?.isAppearanceLightNavigationBars
+        // 操纵页是深色界面，临时唤出系统栏时使用浅色系统图标。
+        controller?.isAppearanceLightStatusBars=false
+        controller?.isAppearanceLightNavigationBars=false
         var disposed=false
         val hide=Runnable {
             if (!disposed) {
@@ -54,6 +69,8 @@ fun FlightImmersiveMode(activity: Activity?) {
             owner.lifecycle.removeObserver(resume)
             if (hadStatus) controller?.show(WindowInsetsCompat.Type.statusBars())
             if (hadNavigation) controller?.show(WindowInsetsCompat.Type.navigationBars())
+            darkStatusIcons?.let { controller?.isAppearanceLightStatusBars=it }
+            darkNavigationIcons?.let { controller?.isAppearanceLightNavigationBars=it }
             behavior?.let { controller?.systemBarsBehavior=it }
         }
     }

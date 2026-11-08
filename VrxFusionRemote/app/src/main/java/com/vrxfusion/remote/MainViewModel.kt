@@ -19,8 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * 主 ViewModel：登录角色、服务连接、设备目录、控制会话（MVVM）。
@@ -29,6 +27,16 @@ import kotlinx.serialization.json.jsonPrimitive
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     val diagnostics=com.vrxfusion.remote.diagnostics.FlightDiagnostics(app,viewModelScope)
     val flightGateway by lazy { com.vrxfusion.remote.unified.FlightGateway(rotorClient(),viewModelScope) }
+    val serverLogs=com.vrxfusion.remote.logs.ServerLogsStore(viewModelScope,java.io.File(app.cacheDir,"server-logs"))
+    fun serverLogConnection(): com.vrxfusion.remote.logs.LogConnection? {
+        // 点击瞬间可能恰逢断网；重新检查并提示，不能把页面上的旧enabled值当成连接保证。
+        if (!flightGateway.repository.running.value || !flightGateway.repository.connected.value ||
+            flightGateway.repository.info.value?.capabilities?.get("logs_query")!=true) {
+            serverLogs.view.value=serverLogs.view.value.copy(message="请先连接声明日志能力的后端。")
+            return null
+        }
+        return com.vrxfusion.remote.logs.LogConnection(_rotorBaseUrl.value,_rotorToken.value)
+    }
 
     // 地址保存在本机，Token仅保存在当前进程内，不明文持久化。
     private val preferences = app.getSharedPreferences("backend_connection", 0)
@@ -45,7 +53,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun rollbackHud() { runCatching { _hudPreferences.value=hudStore.rollback() }
         .onSuccess { hudRevision.value=hudStore.revision(); hudConfigMessage.value="已回退显示配置" }
         .onFailure { hudConfigMessage.value="回退失败：${it.message}" } }
-    /** 恢复出厂显示配置：先自动存回退点，误操作可立即回退。 */
+    /** 合并GitHub已有恢复默认功能：先留回退点，显示配置不会突破安全规则。 */
     fun resetHudDefaults() {
         hudStore.checkpoint(); hudCheckpoint.value=true
         setHudPreferences(com.vrxfusion.remote.ui.HudPreferences())
@@ -201,10 +209,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _rotorToken = MutableStateFlow(com.vrxfusion.remote.unified.connectionIdentities[_connectionIdentity.value].token)
     val rotorToken: StateFlow<String> = _rotorToken
 
-    fun setRotorBaseUrl(url: String) { _rotorBaseUrl.value = url }
-    fun setRotorToken(token: String) { _rotorToken.value = token; _connectionIdentity.value=-1 }
+    fun setRotorBaseUrl(url: String) { if (url!=_rotorBaseUrl.value) serverLogs.clear(); _rotorBaseUrl.value = url }
+    fun setRotorToken(token: String) { if (token!=_rotorToken.value) serverLogs.clear(); _rotorToken.value = token; _connectionIdentity.value=-1 }
     fun selectConnectionIdentity(index: Int) {
         if (flightGateway.running.value || index !in 0..3) return
+        serverLogs.clear()
         _connectionIdentity.value=index
         _rotorToken.value=com.vrxfusion.remote.unified.connectionIdentities[index].token
         preferences.edit().putInt("pilot_preset",index).apply() // 仅保存公开预设编号，不落盘用户输入的Token。
@@ -225,26 +234,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             flightGateway.connect(_rotorBaseUrl.value,_rotorToken.value,false)
         }
     }
-
-    // ---- 服务端审计日志（11/19 功能扩展：查询与导出，观察端同样可读） ----
-    private val _logsSummary = MutableStateFlow<String?>(null)
-    val logsSummary: StateFlow<String?> = _logsSummary
-
-    /** 查询服务端审计日志概况；结果或失败原因写入 logsSummary。 */
-    fun refreshServerLogsSummary() {
-        viewModelScope.launch {
-            _logsSummary.value = runCatching {
-                val data = flightGateway.repository.queryLogs(_rotorBaseUrl.value,_rotorToken.value,"?limit=5")["data"]!!.jsonObject
-                val total = data["total"]?.jsonPrimitive?.content ?: "?"
-                "服务端审计日志共 $total 条（可按设备/事件/时间过滤；导出为全部匹配内容）"
-            }.getOrElse { "服务端日志查询失败：${it.message}" }
-        }
-    }
-
-    /** 导出服务端审计日志为文件字节，由页面用 SAF 保存；失败返回 null 并写提示。 */
-    suspend fun exportServerLogs(format: String): ByteArray? = runCatching {
-        flightGateway.repository.downloadLogs(_rotorBaseUrl.value,_rotorToken.value,format)
-    }.onFailure { _logsSummary.value="服务端日志导出失败：${it.message}" }.getOrNull()
 
     /** 离开控制区域/进入后台立即停流；后台上报由ViewModel执行，不依赖已销毁页面的协程。 */
     fun pauseRotor() {
@@ -278,6 +267,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        serverLogs.close()
         diagnostics.close()
         flightGateway.close()
         rotorPyClient?.stopPolling()

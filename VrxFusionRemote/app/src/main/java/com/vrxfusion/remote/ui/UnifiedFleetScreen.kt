@@ -23,7 +23,7 @@ import kotlin.math.*
 
 /** 设备目录与集群共用v1状态仓库；筛选永远不发select或接管请求。 */
 @Composable
-fun ClusterMonitorScreen(vm: MainViewModel,onBack: ()->Unit) {
+fun ClusterMonitorScreen(vm: MainViewModel,onBack: ()->Unit,onManageConnection: ()->Unit) {
     val c=vm.flightGateway.repository
     val state by c.snapshot.collectAsState()
     val directory by c.directory.collectAsState()
@@ -34,11 +34,11 @@ fun ClusterMonitorScreen(vm: MainViewModel,onBack: ()->Unit) {
     Column(Modifier.fillMaxSize().background(BgDark).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-            Text("设备与集群",fontSize=24.sp,fontWeight=FontWeight.Bold,color=TextPrimary)
+            Text("三机总览",fontSize=24.sp,fontWeight=FontWeight.Bold,color=TextPrimary,modifier=Modifier.testTag("fleet-title"))
             TextButton(onClick=onBack) { Text("返回") }
         }
         Text("统一地址 · 只读观察 · 筛选不接管设备",color=AccentBlue,fontSize=12.sp)
-        ConnectionPanel(vm,running,vm::connectCluster,vm::pauseRotor)
+        BackendConnectionSummary(vm,onManageConnection)
         error?.let { Text(it,color=WarnAmber) }
         Text(if (connected) "● 统一状态  %.1f Hz".format(hz) else "● 未连接 / 历史状态",color=if (connected) VirtualGreen else WarnAmber)
         state?.let { UnifiedFleetContent(it,directory,connected) { m->c.fresh(m) } }

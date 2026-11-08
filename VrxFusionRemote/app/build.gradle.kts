@@ -21,8 +21,8 @@ android {
         applicationId = "com.vrxfusion.remote"
         minSdk = 29            // NFR-003: Android 10 及以上
         targetSdk = 34
-        versionCode = 900
-        versionName = "0.9.0"
+        versionCode = 903
+        versionName = "0.9.3"
     }
 
     buildTypes {

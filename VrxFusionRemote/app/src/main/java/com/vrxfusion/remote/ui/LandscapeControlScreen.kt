@@ -18,8 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,17 +31,18 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,7 +59,7 @@ import kotlin.math.*
 
 /** 所有布局使用同一会话、同一摇杆状态和同一提示决策，横竖屏不会再导航到另一个操控窗口。 */
 @Composable
-fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
+fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit, onManageConnection: () -> Unit) {
     val client=vm.flightGateway; val scope=vm.rotorScope
     val state by client.state.collectAsState()
     val connected by client.connected.collectAsState()
@@ -80,6 +80,9 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
     val videoSource by vm.videoSource.collectAsState()
     val videoGeneration by vm.videoGeneration.collectAsState()
     val videoStatus by vm.videoStatus.collectAsState()
+    var viewportMessage by remember(videoSource,videoGeneration) {
+        mutableStateOf<String?>(if (videoSource==VideoSource.NONE) "UE 画面未接入" else "正在开启${videoSource.label}…")
+    }
     val unifiedSnapshot by client.repository.snapshot.collectAsState()
     val unifiedInfo by client.repository.info.collectAsState()
     var left by remember { mutableStateOf(Offset.Zero) }
@@ -88,6 +91,8 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
     var rightTouch by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     var settingsTab by remember { mutableIntStateOf(0) }
+    val settingsMotion=rememberMotionSheet(settingsOpen)
+    val routeMoving=LocalMotionInputBlocked.current
     val activity=LocalContext.current.findActivity()
     val context=LocalContext.current
     val cameraPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -99,6 +104,8 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
     LaunchedEffect(client) { while (isActive) withFrameNanos { client.pulseInputUi() } }
     DisposableEffect(activity) {
         val original=activity?.requestedOrientation
+        // 独立操纵只使用横屏，允许手机左右翻转；离开操纵页恢复原方向策略。
+        activity?.requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose {
             original?.let { activity?.requestedOrientation=it }
             client.onStick(StickSnapshot(),scope)
@@ -111,14 +118,11 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
         settingsTab=tab; settingsOpen=true
     }
     val neutral=left == Offset.Zero && right == Offset.Zero && !leftTouch && !rightTouch
-    val baseNotice=flightNotice(state,connected,running,stale,phase,busy,holding,neutral,error,writable)
-    // 操作回执只补充普通提示，不覆盖断线、保护和失败告警。
-    val notice=if (feedback!=null && baseNotice.id in setOf("READY","OBSERVING"))
-        baseNotice.copy(detail=feedback!!.text()) else baseNotice
+    val notice=flightNotice(state,connected,running,stale,phase,busy,holding,neutral,error,writable)
     val canInput=connected && writable && !stale && !busy && state?.mode != "PROTECTED" &&
-        !safetyBusy && phase == LinkPhase.READY && !settingsOpen
+        !safetyBusy && phase == LinkPhase.READY && !settingsMotion.visible && !routeMoving
     // 按已提交到Compose的不同步号计数，不能拿网络接收频率冒充APP刷新率。
-    SideEffect { if (connected && !stale && !settingsOpen && state!=null)
+    SideEffect { if (connected && !stale && !settingsMotion.visible && !routeMoving && state!=null)
         client.renderedRate.record("${state!!.boot_id}:${state!!.sequence}") }
     fun report()=client.onStick(StickSnapshot(right.x,right.y,left.x,left.y),scope)
 
@@ -130,17 +134,21 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
             onBack=onBack, onSettings={ openSettings(1) },hud=hud,
             videoLabel=videoSource.takeUnless { it==VideoSource.NONE }?.label,
             qualityLabel=client.primaryState()?.qualityText(),
+            commandReceipt=feedback?.text(),
+            viewportStatus=viewportMessage,
             fleetMembers=unifiedSnapshot?.members.orEmpty(),selfDeviceId=unifiedInfo?.controlDeviceId(),
             memberFresh={ client.repository.fresh(it) },
             ueContent={ key(videoSource,videoGeneration) {
                 val sessionGeneration=videoGeneration
-                TestVideoViewport(videoSource,videoSettings,videoCode,{
-                    if (vm.videoGeneration.value==sessionGeneration) vm.videoStatus.value=it
-                })
+                TestVideoViewport(videoSource,videoSettings,videoCode) { status,failed ->
+                    if (vm.videoGeneration.value==sessionGeneration) {
+                        vm.videoStatus.value=status
+                        viewportMessage=status.takeIf { failed }
+                    }
+                }
             } },
-            onRotate={ activity?.requestedOrientation=if (wide) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE },
             onPrimary={ when (notice.action) {
-                FlightAction.CONNECTION -> openSettings(0)
+                FlightAction.CONNECTION -> onManageConnection()
                 FlightAction.REQUEST -> client.retryHandshake(scope)
                 FlightAction.RESUME -> scope.launch { client.resume(scope) }
                 FlightAction.NONE -> Unit
@@ -148,10 +156,11 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
             onStop={ scope.launch { client.stop() } }, onProtect={ scope.launch { client.protect() } },
             onLeft={ left=it; report() }, onRight={ right=it; report() },
             onLeftTouch={ leftTouch=it }, onRightTouch={ rightTouch=it })
-        if (settingsOpen) FlightSettingsPanel(
+        if (settingsMotion.visible) FlightSettingsPanel(
             selectedTab=settingsTab,onTabChange={ settingsTab=it },hud=hud,onHudChange=vm::setHudPreferences,
+            motionProgress=settingsMotion.progress,motionInputBlocked=!settingsMotion.ready,
             onClose={ settingsOpen=false },
-            configContent={ HudConfigPanel(vm) },
+            configContent={ HudConfigPanel(vm) },onResetHud=vm::resetHudDefaults,
             safetyContent={ FlightSafetyButtons(running && client.canUseSafety(),{ scope.launch { client.stop() } },{ scope.launch { client.protect() } }) },
             linkLabel=when { stale->"数据已失效"; connected->"已连接 · %.1f Hz".format(hz); running->"正在连接"; else->"未连接" },
             linkHealthy=connected && !stale,
@@ -162,8 +171,8 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
                         cameraPermission.launch(Manifest.permission.CAMERA)
                     else vm.startVideo()
                 },onStop={ vm.stopVideo() }) }) {
-            ConnectionPanel(vm,running,vm::connectRotor,vm::pauseRotor)
-            UnifiedBackendPanel(vm)
+            BackendConnectionSummary(vm) { settingsOpen=false; onManageConnection() }
+            CommandReceiptPanel(vm)
             DiagnosticsPanel(vm)
         }
     }
@@ -173,76 +182,106 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit) {
 /** 设置遮住操控页时，安全操作依然固定可达；忙碌不会禁用它们。 */
 @Composable
 fun FlightSafetyButtons(enabled: Boolean,onStop: ()->Unit,onProtect: ()->Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick=onStop,enabled=enabled,modifier=Modifier.weight(1f)) { Text("停止") }
+    Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=2.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        Button(onClick=onStop,enabled=enabled,modifier=Modifier.weight(1f),
+            colors=ButtonDefaults.buttonColors(containerColor=SurfaceCard,contentColor=TextPrimary)) { Text("停止") }
         Button(onClick=onProtect,enabled=enabled,modifier=Modifier.weight(1f),
-            colors=ButtonDefaults.buttonColors(containerColor=EstopRed)) { Text("保护") }
+            colors=ButtonDefaults.buttonColors(containerColor=ProtectionFill,contentColor=ProtectionText)) { Text("保护") }
     }
 }
 
+private val ProtectionFill=Color(0xFF713936)
+private val ProtectionText=Color(0xFFFFE5E1)
+
 /**
  * UE始终铺满整页，HUD只叠加在其上，不占用或缩小视频容器。
- * 透明度分别作用于非关键显示层，控制按钮与唯一提示栏永远不继承这些alpha。
+ * 透明度分别作用于非关键显示层，控制按钮与顶部告警保持独立。
  */
 @Composable
 fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: FlightNotice,
     fresh: Boolean, wide: Boolean, receiveHz: Double, inputEnabled: Boolean, safetyEnabled: Boolean,
-    onBack: ()->Unit={}, onSettings: ()->Unit={}, onRotate: ()->Unit={}, onPrimary: ()->Unit={},
+    onBack: ()->Unit={}, onSettings: ()->Unit={}, onPrimary: ()->Unit={},
     onStop: ()->Unit={}, onProtect: ()->Unit={},
     onLeft: (Offset)->Unit={}, onRight: (Offset)->Unit={}, onLeftTouch: (Boolean)->Unit={}, onRightTouch: (Boolean)->Unit={},
     hud: HudPreferences=HudPreferences(), videoLabel: String?=null,qualityLabel: String?=null,
     fleetMembers: List<UnifiedDeviceState> = emptyList(),selfDeviceId: String?=null,
-    memberFresh: (UnifiedDeviceState)->Boolean={false},ueContent: @Composable ()->Unit={ UeViewport() }) {
+    memberFresh: (UnifiedDeviceState)->Boolean={false},commandReceipt: String?=null,
+    viewportStatus: String?=null,ueContent: (@Composable ()->Unit)?=null) {
     val display=hud.normalized()
     Box(Modifier.fillMaxSize().testTag("cockpit")) {
         // 后续UE视频组件只替换此内容，保持Texture/View层在HUD之下。
-        Box(Modifier.matchParentSize().testTag("ue-viewport")) { ueContent() }
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(8.dp),
+        Box(Modifier.matchParentSize().background(BgDark).testTag("ue-viewport")) { ueContent?.invoke() }
+        Column(Modifier.fillMaxSize().windowInsetsPadding(flightSafeInsets()).padding(8.dp),
             verticalArrangement=Arrangement.spacedBy(6.dp)) {
             @Composable fun buttons(modifier: Modifier=Modifier) {
                 Row(modifier.testTag("critical-actions"),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                     Button(onClick=onPrimary,enabled=notice.actionEnabled,modifier=Modifier.weight(1f).height(48.dp),
+                        shape=RoundedCornerShape(14.dp),
+                        colors=ButtonDefaults.buttonColors(containerColor=ControlFill,contentColor=ControlText,
+                            disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary),
                         contentPadding=PaddingValues(horizontal=8.dp)) { Text(notice.actionLabel,maxLines=1,fontSize=12.sp) }
-                    OutlinedButton(onClick=onStop,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
-                        colors=ButtonDefaults.outlinedButtonColors(containerColor=Color(0xEE102033),contentColor=Color.White),
+                    Button(onClick=onStop,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
+                        shape=RoundedCornerShape(14.dp),
+                        colors=ButtonDefaults.buttonColors(containerColor=SurfaceCard,contentColor=TextPrimary,
+                            disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary),
                         contentPadding=PaddingValues(4.dp)) { Text("停止",fontSize=12.sp) }
                     Button(onClick=onProtect,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
-                        contentPadding=PaddingValues(4.dp),colors=ButtonDefaults.buttonColors(containerColor=EstopRed)) { Text("保护",fontSize=12.sp) }
+                        shape=RoundedCornerShape(14.dp),
+                        contentPadding=PaddingValues(4.dp),
+                        colors=ButtonDefaults.buttonColors(containerColor=ProtectionFill,contentColor=ProtectionText,
+                            disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary)) { Text("保护",fontSize=12.sp) }
                 }
             }
-            Row(Modifier.fillMaxWidth().height(48.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                IconButton(onClick=onBack,modifier=Modifier.background(Color(0xCC102033),CircleShape)) {
-                    Icon(Icons.Default.ArrowBack,contentDescription="返回首页",tint=TextPrimary)
+            Row(Modifier.fillMaxWidth().height(48.dp).background(
+                Brush.horizontalGradient(listOf(HudSurface,HudSurface.copy(alpha=.72f))),RoundedCornerShape(14.dp)),
+                verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                IconButton(onClick=onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack,contentDescription="返回首页",tint=TextPrimary)
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(if (state?.data_source=="simulation_truth") "飞行操控 · 仿真" else "飞行操控 · 来源未确认",color=TextPrimary,fontWeight=FontWeight.Bold,fontSize=15.sp,
-                        modifier=Modifier.background(Color(0xCC102033),RoundedCornerShape(6.dp)).padding(horizontal=6.dp,vertical=2.dp))
-                    Text((state?.device_id ?: "单机 · 等待连接")+(videoLabel?.let { " · $it" } ?: ""),color=TextPrimary,fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis,
-                        modifier=Modifier.background(Color(0xCC102033),RoundedCornerShape(4.dp)).padding(horizontal=4.dp))
+                    Text(if (state?.data_source=="simulation_truth") "飞行操控 · 仿真" else "飞行操控 · 来源未确认",
+                        color=TextPrimary,fontWeight=FontWeight.SemiBold,fontSize=15.sp,lineHeight=19.sp,
+                        maxLines=1,overflow=TextOverflow.Ellipsis)
+                    Text((state?.device_id ?: "单机 · 等待连接")+(videoLabel?.let { " · $it" } ?: ""),
+                        color=TextSecondary,fontSize=11.sp,lineHeight=15.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                 }
                 if (wide) buttons(Modifier.width(274.dp))
-                IconButton(onClick=onSettings,modifier=Modifier.background(Color(0xCC102033),CircleShape)) {
-                    Icon(Icons.Default.Settings,contentDescription="连接与显示设置",tint=TextPrimary)
-                }
-                IconButton(onClick=onRotate,modifier=Modifier.background(Color(0xCC102033),CircleShape)) {
-                    Icon(Icons.Default.ScreenRotation,contentDescription=if (wide) "切换竖屏" else "切换横屏",tint=TextPrimary)
+                IconButton(onClick=onSettings) {
+                    Icon(Icons.Default.Settings,contentDescription="飞行设置",tint=TextPrimary)
                 }
             }
             if (!wide) buttons(Modifier.fillMaxWidth())
             if (display.showPosition) Row(Modifier.fillMaxWidth().height(26.dp).alpha(display.positionOpacity)
-                .background(Color(0xB3102033),RoundedCornerShape(6.dp)).padding(horizontal=8.dp).testTag("position-readout"),
+                .testTag("position-readout"),
                 verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
                 Text(if (state == null || !fresh) "X —  Y —  Z — m" else "X %.2f  Y %.2f  Z %.2f m".format(
                     state.position_m.getOrElse(0){0.0},state.position_m.getOrElse(1){0.0},state.position_m.getOrElse(2){0.0}),
-                    color=TextPrimary,fontSize=11.sp,fontFamily=FontFamily.Monospace)
-                Text(if (fresh) "%.1fHz · %.2fm/s".format(receiveHz,state?.speed() ?: 0.0) else "状态未更新",
-                    color=if (fresh) VirtualGreen else WarnAmber,fontSize=10.sp)
+                    color=TextPrimary,fontSize=11.sp,fontFamily=FontFamily.Monospace,
+                    modifier=Modifier.background(HudSurface.copy(alpha=.65f),RoundedCornerShape(6.dp))
+                        .padding(horizontal=8.dp,vertical=3.dp))
+                if (fresh) Text("%.1fHz · %.2fm/s".format(receiveHz,state?.speed() ?: 0.0),color=TextSecondary,fontSize=10.sp,
+                    modifier=Modifier.background(HudSurface.copy(alpha=.65f),RoundedCornerShape(6.dp))
+                        .padding(horizontal=8.dp,vertical=3.dp))
             }
             // 运行模式和来源与模拟/缺失标记始终可见，显示配置不能隐藏数据质量提示。
-            Text(if (!fresh) "状态未更新 · 仪表仅供历史参考" else
-                "${state?.mode ?: "—"} · 通路 ${state?.selected_source ?: "未选择"} · ${qualityLabel ?: "任务未接入 · GNSS/电量未接入"}",
-                color=if (fresh) TextSecondary else WarnAmber,fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis,
-                modifier=Modifier.background(Color(0xB3102033),RoundedCornerShape(4.dp)).padding(horizontal=6.dp).testTag("data-quality"))
+            Row(Modifier.fillMaxWidth().heightIn(min=24.dp),verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.SpaceBetween) {
+                Text(if (!fresh) "状态未更新 · 仪表仅供历史参考" else
+                    "${state?.mode ?: "—"} · 通路 ${state?.selected_source ?: "未选择"} · ${qualityLabel ?: "任务未接入 · GNSS/电量未接入"}",
+                    color=if (fresh) TextSecondary else WarnAmber,fontSize=10.sp,lineHeight=14.sp,
+                    maxLines=1,overflow=TextOverflow.Ellipsis,
+                    modifier=Modifier.weight(1f,fill=false).background(HudSurface,RoundedCornerShape(8.dp))
+                        .padding(horizontal=8.dp,vertical=4.dp).testTag("data-quality"))
+                val videoMessage=viewportStatus ?: if (ueContent==null) "UE 画面未接入" else null
+                if (videoMessage!=null) {
+                    Text(videoMessage,color=TextSecondary,fontSize=10.sp,lineHeight=14.sp,maxLines=1,
+                        overflow=TextOverflow.Ellipsis,
+                        modifier=Modifier.padding(start=8.dp).widthIn(max=if (wide) 240.dp else 120.dp)
+                            .background(HudSurface,RoundedCornerShape(8.dp))
+                            .padding(horizontal=8.dp,vertical=4.dp).testTag("video-viewport-status"))
+                }
+            }
+            FlightAlert(notice,commandReceipt)
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("hud-field")) {
                 val stickWidth=minOf(if (wide) 128.dp else 144.dp,(maxWidth-16.dp)/2)
                 val inset=if (wide) stickWidth+8.dp else 0.dp
@@ -263,50 +302,38 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
                 StickPanel("前后 / 左右",inputEnabled,onRight,onRightTouch,
                     Modifier.align(Alignment.BottomEnd).width(stickWidth).height(stickHeight).alpha(display.joystickOpacity).testTag("right-stick-panel"))
             }
-            Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
-                FlightNoticeBar(notice,Modifier.widthIn(max=520.dp))
-            }
         }
     }
 }
 
 @Composable
 private fun StickPanel(label: String,enabled: Boolean,onValue: (Offset)->Unit,onTouch: (Boolean)->Unit,modifier: Modifier) {
-    BoxWithConstraints(modifier) {
-        val diameter=minOf(128.dp,maxWidth,(maxHeight-24.dp).coerceAtLeast(24.dp))
-        Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
-            VirtualJoystick(enabled,onValue,onTouch,diameter)
-            Spacer(Modifier.height(4.dp))
-            Text(label,color=TextPrimary,fontSize=11.sp,maxLines=1,
-                modifier=Modifier.background(Color(0xB3102033),RoundedCornerShape(4.dp)).padding(horizontal=4.dp)
-                    .testTag(if (label.startsWith("升降")) "left-stick-label" else "right-stick-label"))
-        }
+    // 底部保留握持留白和原有摇杆位置，轴向说明交给无障碍语义。
+    BoxWithConstraints(modifier.padding(bottom=24.dp).semantics { contentDescription=label },
+        contentAlignment=Alignment.Center) {
+        val diameter=minOf(128.dp,maxWidth,maxHeight.coerceAtLeast(24.dp))
+        VirtualJoystick(enabled,onValue,onTouch,diameter)
     }
 }
 
-/** 当前只有全屏视频接入容器。UE视频源未提供时明确显示等待，不以遥测图冒充UE场景。 */
+/** 提示卡靠左，保留背景画面；固定区域避免切换提示时操纵控件位移。 */
 @Composable
-fun UeViewport(modifier: Modifier=Modifier) {
-    Box(modifier.fillMaxSize().background(Color(0xFF101D2B)),contentAlignment=Alignment.Center) {
-        Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("UE全屏画面",color=BoundPurple,fontSize=18.sp,fontWeight=FontWeight.SemiBold)
-            Text("等待UE视频源接入",color=TextSecondary,fontSize=12.sp)
+private fun FlightAlert(notice: FlightNotice,commandReceipt: String?) {
+    val alert = notice.tone == NoticeTone.DANGER || notice.tone == NoticeTone.WARNING
+    val textLine=with(LocalDensity.current) { 16.sp.toDp() }
+    Box(Modifier.fillMaxWidth().height(maxOf(38.dp,textLine*2+6.dp))) {
+        if (alert || commandReceipt != null) {
+            Column(Modifier.widthIn(max=420.dp).fillMaxHeight().background(HudSurface,RoundedCornerShape(10.dp))
+                .padding(horizontal=8.dp,vertical=3.dp).testTag("flight-notice"),verticalArrangement=Arrangement.Center) {
+                if (alert) {
+                    Text(notice.title,color=if (notice.tone==NoticeTone.DANGER) ProtectionText else WarnAmber,
+                        fontSize=11.sp,lineHeight=14.sp,fontWeight=FontWeight.SemiBold,
+                        maxLines=1,overflow=TextOverflow.Ellipsis)
+                }
+                Text(if (alert) notice.detail else commandReceipt.orEmpty(),color=TextPrimary,fontSize=11.sp,lineHeight=14.sp,
+                    maxLines=1,overflow=TextOverflow.Ellipsis)
+            }
         }
-    }
-}
-
-/** 底部提示只绘制文字，背景完全透明；描影保证叠在明亮UE画面上仍可辨认。 */
-@Composable
-fun FlightNoticeBar(notice: FlightNotice,modifier: Modifier=Modifier) {
-    val color=when(notice.tone) { NoticeTone.DANGER->Color(0xFFFFB1AC); NoticeTone.WARNING->WarnAmber; NoticeTone.GOOD->VirtualGreen; else->AccentBlue }
-    val shadow=TextStyle(shadow=Shadow(Color.Black,Offset(0f,1f),4f))
-    // 固定占位防止告警出现时推动仪表；没有背景、详情按钮或弹窗，保留关键状态文字。
-    Column(modifier.fillMaxWidth().height(48.dp).padding(horizontal=12.dp).testTag("flight-notice"),
-        verticalArrangement=Arrangement.Center) {
-        Text(notice.title,color=color,fontSize=13.sp,fontWeight=FontWeight.SemiBold,
-            maxLines=1,overflow=TextOverflow.Ellipsis,style=shadow)
-        Text(notice.detail,color=TextPrimary,fontSize=10.sp,lineHeight=12.sp,
-            maxLines=2,overflow=TextOverflow.Ellipsis,style=shadow)
     }
 }
 
@@ -321,7 +348,7 @@ fun AttitudePanel(quaternion: List<Double>?,fresh: Boolean,modifier: Modifier=Mo
     }
     val roll by animateFloatAsState(rollTarget,tween(120),label="仅姿态横滚")
     val pitch by animateFloatAsState(pitchTarget,tween(120),label="仅姿态俯仰")
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xB3102033)).padding(if (compact) 4.dp else 8.dp).testTag("attitude-panel"),
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(HudSurface).padding(if (compact) 4.dp else 8.dp).testTag("attitude-panel"),
         horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
         if (!compact) Text("姿态",color=TextPrimary,fontSize=12.sp)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center) {
@@ -373,7 +400,7 @@ private fun PositionMap(state: RotorState?,trail: List<Pair<Double,Double>>,fres
         ?.let { "%.2f".format(java.util.Locale.ROOT,it) } ?: "—"
     val mode=if (focused) "当前位置近景" else "完整轨迹总览"
     val gridLabel="%.2f".format(java.util.Locale.ROOT,viewport.gridMeters).trimEnd('0').trimEnd('.')
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xB3102033))
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(HudSurface)
         .clickable(role=Role.Button,onClickLabel=if (focused) "恢复轨迹总览" else "放大当前位置") { focused=!focused }
         .semantics { stateDescription=mode }.padding(6.dp).testTag("position-panel"),
         verticalArrangement=Arrangement.spacedBy(3.dp)) {

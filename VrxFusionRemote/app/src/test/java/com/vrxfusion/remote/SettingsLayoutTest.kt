@@ -15,6 +15,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.drawToBitmap
 import com.vrxfusion.remote.ui.*
 import com.vrxfusion.remote.ui.theme.VrxTheme
@@ -53,6 +56,11 @@ class SettingsLayoutTest {
         val bitmap=rule.runOnIdle { rule.activity.findViewById<View>(android.R.id.content).drawToBitmap(Bitmap.Config.ARGB_8888) }
         file.outputStream().buffered().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
     }
+    private fun previewPixels(): Bitmap {
+        val b=rule.onNodeWithTag("preview-map").fetchSemanticsNode().boundsInRoot
+        val root=rule.runOnIdle {rule.activity.findViewById<View>(android.R.id.content).drawToBitmap(Bitmap.Config.ARGB_8888)}
+        return Bitmap.createBitmap(root,b.left.toInt(),b.top.toInt(),b.width.toInt(),b.height.toInt())
+    }
     @Composable private fun Fields(running: Boolean=false) {
         ConnectionFields("http://192.168.1.100:8765","demo-app-token-2026",running,{},{},{},{})
     }
@@ -80,19 +88,44 @@ class SettingsLayoutTest {
         rule.onNodeWithTag("underlying-cockpit").assertIsDisplayed()
         rule.runOnIdle { assertEquals(0,behindClicks) }
     }
-    @Test fun presetsAndSlidersSaveWithoutChangingOtherFields() {
+    @Test @Config(qualifiers="zh-rCN-w640dp-h320dp-land-xhdpi")
+    fun presetsAndSlidersSaveWithoutChangingOtherFields() {
         val store=HudPreferencesStore(RuntimeEnvironment.getApplication())
         val value=mutableStateOf(store.save(HudPreferences()))
-        rule.setContent { VrxTheme { FlightSettingsPanel(1,{},value.value,{ value.value=store.save(it) },{}) { Fields() } } }
+        rule.setContent { VrxTheme { FlightSettingsPanel(1,{},value.value,{ value.value=store.save(it) },{},
+            safetyContent={FlightSafetyButtons(true,{},{})}) { Fields() } } }
+        rule.runOnIdle {
+            val nav=WindowInsetsCompat.Type.navigationBars()
+            val status=WindowInsetsCompat.Type.statusBars()
+            val insets=WindowInsetsCompat.Builder()
+                .setInsetsIgnoringVisibility(nav,Insets.of(0,0,96,48))
+                .setInsetsIgnoringVisibility(status,Insets.of(0,48,0,0))
+                .setVisible(nav or status,false).build()
+            ViewCompat.dispatchApplyWindowInsets(rule.activity.findViewById(android.R.id.content),insets)
+        }
         rule.onNodeWithText("沉浸").performClick()
         rule.runOnIdle { assertEquals(HudPreset.IMMERSIVE.preferences,store.load()) }
+        val preview=rule.onNodeWithTag("hud-preview").fetchSemanticsNode().boundsInRoot
+        val oldMap=previewPixels()
         rule.onNodeWithContentDescription("地图不透明度").performScrollTo()
             .performSemanticsAction(SemanticsActions.SetProgress) { it(.4f) }
         rule.runOnIdle {
             val saved=store.load(); assertEquals(.4f,saved.mapOpacity,.001f)
             assertEquals(HudPreset.IMMERSIVE.preferences.joystickOpacity,saved.joystickOpacity,0f)
         }
-        rule.onNodeWithText("显示预览").performScrollTo(); save("settings-preview")
+        assertFalse(oldMap.sameAs(previewPixels()))
+        assertEquals(preview,rule.onNodeWithTag("hud-preview").fetchSemanticsNode().boundsInRoot)
+        rule.onNodeWithText("显示预览").assertIsDisplayed()
+        save("settings-preview")
+        val originalMap=rule.onNodeWithTag("preview-map").fetchSemanticsNode().boundsInRoot
+        rule.runOnIdle {value.value=store.save(value.value.copy(swapInstruments=true,instrumentScale=.8f))}
+        val swappedMap=rule.onNodeWithTag("preview-map").fetchSemanticsNode().boundsInRoot
+        assertTrue(swappedMap.left<originalMap.left && swappedMap.width<originalMap.width)
+        rule.runOnIdle {value.value=store.save(value.value.copy(showAttitude=false,showMap=false,showPosition=false))}
+        rule.onNodeWithTag("attitude-dial").assertDoesNotExist()
+        rule.onNodeWithTag("preview-map").assertDoesNotExist()
+        rule.onNodeWithTag("preview-position").assertDoesNotExist()
+        rule.runOnIdle {value.value=store.save(HudPreset.IMMERSIVE.preferences)}
         rule.onNodeWithText("恢复显示默认值").performScrollTo().performClick()
         rule.runOnIdle { assertEquals(HudPreferences(),store.load()) }
     }
@@ -103,7 +136,7 @@ class SettingsLayoutTest {
         singleWindow(); save("settings-portrait")
         rule.onNodeWithText("恢复显示默认值").performScrollTo().assertIsDisplayed()
         rule.onNodeWithTag("settings-done").assertIsDisplayed()
-        rule.onNodeWithText("连接服务").performClick()
+        rule.onNodeWithText("连接状态").performClick()
         rule.onNodeWithTag("backend-address").assertIsNotFocused()
         rule.onNodeWithTag("backend-token").assertIsNotFocused()
         rule.onNodeWithText("连接并查看状态").performScrollTo().assertIsDisplayed()

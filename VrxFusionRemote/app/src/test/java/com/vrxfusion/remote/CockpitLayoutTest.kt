@@ -1,9 +1,14 @@
 package com.vrxfusion.remote
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.core.view.drawToBitmap
+import androidx.core.graphics.Insets
+import androidx.core.view.DisplayCutoutCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -56,12 +61,11 @@ class CockpitLayoutTest {
         return Bitmap.createBitmap(captureRoot(),bounds.left.toInt(),bounds.top.toInt(),bounds.width.toInt(),bounds.height.toInt())
     }
     private fun assertNoOverlap() {
-        rule.onAllNodesWithTag("flight-notice").assertCountEquals(1)
         val root=rule.onNodeWithTag("cockpit").fetchSemanticsNode().boundsInRoot
         assertEquals("UE必须铺满全页",root,rule.onNodeWithTag("ue-viewport").fetchSemanticsNode().boundsInRoot)
         rule.onNodeWithTag("position-panel").assertIsDisplayed()
         rule.onNodeWithTag("attitude-panel").assertIsDisplayed()
-        val tags=listOf("attitude-panel","position-panel","left-stick-panel","right-stick-panel","critical-actions","flight-notice")
+        val tags=listOf("attitude-panel","position-panel","left-stick-panel","right-stick-panel","critical-actions")
         for (i in tags.indices) for (j in i+1 until tags.size) {
             val a=rule.onNodeWithTag(tags[i]).fetchSemanticsNode().boundsInRoot
             val b=rule.onNodeWithTag(tags[j]).fetchSemanticsNode().boundsInRoot
@@ -73,10 +77,12 @@ class CockpitLayoutTest {
         rule.setContent { VrxTheme { FlightCockpit(state.value,emptyList(),notice(state.value),true,true,25.0,state.value.mode != "PROTECTED",true) } }
         assertNoOverlap()
         val before=rule.onNodeWithTag("ue-viewport").fetchSemanticsNode().boundsInRoot
+        val stickBefore=rule.onNodeWithTag("left-stick-panel").fetchSemanticsNode().boundsInRoot
         save("landscape-ready")
         rule.runOnIdle { state.value=normal.copy(mode="PROTECTED",boundary_recovery=BoundaryRecovery(required=true)) }
         rule.waitForIdle(); assertNoOverlap()
         rule.onNodeWithText("等待恢复").assertIsNotEnabled()
+        assertEquals(stickBefore,rule.onNodeWithTag("left-stick-panel").fetchSemanticsNode().boundsInRoot)
         assertEquals(before,rule.onNodeWithTag("ue-viewport").fetchSemanticsNode().boundsInRoot)
         save("landscape-boundary")
         rule.onNodeWithTag("position-panel").assertExists()
@@ -121,7 +127,8 @@ class CockpitLayoutTest {
     }
     @Test fun transparencyChangesHudButNeverCriticalButtonsOrNotice() {
         val hud=mutableStateOf(HudPreferences())
-        rule.setContent { VrxTheme { FlightCockpit(normal,emptyList(),notice(normal),true,true,25.0,true,true,hud=hud.value) } }
+        val protected=normal.copy(mode="PROTECTED")
+        rule.setContent { VrxTheme { FlightCockpit(protected,emptyList(),notice(protected),true,true,25.0,false,true,hud=hud.value) } }
         fun capture(tag: String): Bitmap {
             val b=rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
             return Bitmap.createBitmap(captureRoot(),b.left.toInt(),b.top.toInt(),b.width.toInt(),b.height.toInt())
@@ -158,23 +165,106 @@ class CockpitLayoutTest {
         save("landscape-trajectory-overview")
         checkMapModes("landscape-current-focus")
     }
-    @Test fun noticeHasTransparentBackgroundAndNoDetailsEntry() {
+    @Test fun routinePromptIsRemovedAndImportantWarningsStayAboveTheHud() {
         val current=mutableStateOf(notice(normal))
         val background=Color(0xFFE3D9B7)
         rule.setContent { VrxTheme { FlightCockpit(normal,emptyList(),current.value,true,true,25.0,true,true,
+            viewportStatus="UE 画面未接入",
             ueContent={ Box(Modifier.fillMaxSize().background(background)) }) } }
-        fun checkBackground() {
+        fun checkAlert() {
             rule.onNodeWithText(current.value.title).assertIsDisplayed()
             rule.onNodeWithText("详情").assertDoesNotExist()
             val b=rule.onNodeWithTag("flight-notice").fetchSemanticsNode().boundsInRoot
-            val pixel=captureRoot().getPixel(b.right.toInt()-2,b.center.y.toInt())
-            assertEquals("所有告警状态的提示框都必须透明",0xFFE3D9B7.toInt(),pixel)
+            val stick=rule.onNodeWithTag("left-stick-panel").fetchSemanticsNode().boundsInRoot
+            val video=rule.onNodeWithTag("video-viewport-status").fetchSemanticsNode().boundsInRoot
+            val screen=rule.onNodeWithTag("cockpit").fetchSemanticsNode().boundsInRoot
+            assertTrue(b.bottom<=stick.top)
+            assertTrue(b.width<=screen.width*.6f)
+            assertTrue(video.bottom<=b.top)
+            assertEquals(0xFFE3D9B7.toInt(),captureRoot().getPixel((screen.right-24).toInt(),b.center.y.toInt()))
+            assertNotEquals(0xFFE3D9B7.toInt(),captureRoot().getPixel(b.right.toInt()-12,b.center.y.toInt()))
         }
-        checkBackground()
+        rule.onNodeWithTag("flight-notice").assertDoesNotExist()
+        rule.onNodeWithText(current.value.detail).assertDoesNotExist()
+        rule.onNodeWithText("升降 / 转向").assertDoesNotExist()
+        rule.onNodeWithContentDescription("升降 / 转向").assertIsDisplayed()
         rule.runOnIdle { current.value=notice(normal.copy(mode="PROTECTED")) }
-        checkBackground(); save("landscape-transparent-warning")
+        checkAlert(); save("landscape-bright-video-warning")
         rule.runOnIdle { current.value=flightNotice(normal,false,true,true,LinkPhase.DISCONNECTED,false,false,true,null) }
-        checkBackground()
+        checkAlert()
+    }
+    @Test fun transientSystemBarsKeepTheCockpitAndSettingsStationary() {
+        val settings=mutableStateOf(false)
+        val offline=flightNotice(null,false,false,false,LinkPhase.DISCONNECTED,false,false,true,null,writable=false)
+        rule.setContent { VrxTheme { Box(Modifier.fillMaxSize()) {
+            FlightCockpit(null,emptyList(),offline,false,true,0.0,false,false)
+            if (settings.value) FlightSettingsPanel(0,{},HudPreferences(),{},{},
+                safetyContent={FlightSafetyButtons(true,{},{})}) { }
+        } } }
+        val statusHeight=48
+        fun applyBars(size: Insets, navigationVisible: Boolean, statusSize: Insets=Insets.of(0,statusHeight,0,0),
+            statusVisible: Boolean=false, cutout: DisplayCutoutCompat?=null) {
+            rule.runOnIdle {
+                val navigation=WindowInsetsCompat.Type.navigationBars()
+                val status=WindowInsetsCompat.Type.statusBars()
+                val insets=WindowInsetsCompat.Builder()
+                    .setInsetsIgnoringVisibility(navigation,size)
+                    .setInsetsIgnoringVisibility(status,statusSize)
+                    .setInsets(navigation,if (navigationVisible) size else Insets.NONE)
+                    .setInsets(status,if (statusVisible) statusSize else Insets.NONE)
+                    .setVisible(navigation,navigationVisible)
+                    .setVisible(status,statusVisible)
+                    .setDisplayCutout(cutout).build()
+                ViewCompat.dispatchApplyWindowInsets(rule.activity.findViewById(android.R.id.content),insets)
+            }
+        }
+        fun bounds(tag: String)=rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        for (size in listOf(Insets.of(96,0,0,0),Insets.of(0,0,96,0),Insets.of(0,0,0,48))) {
+            rule.runOnIdle { settings.value=true }
+            applyBars(size,false,statusSize=Insets.NONE)
+            val headerTop=bounds("critical-actions").top
+            val settingsTop=bounds("settings-panel").top
+            applyBars(size,false)
+            assertEquals(headerTop,bounds("critical-actions").top)
+            assertEquals(settingsTop,bounds("settings-panel").top)
+            val left=bounds("left-stick-panel")
+            val right=bounds("right-stick-panel")
+            val dock=bounds("settings-safety-dock")
+            val screen=bounds("cockpit")
+            for (item in listOf(left,right,dock)) {
+                assertTrue(item.left-screen.left>=size.left)
+                assertTrue(screen.right-item.right>=size.right)
+                assertTrue(screen.bottom-item.bottom>=size.bottom)
+            }
+            applyBars(size,true)
+            assertEquals(left,bounds("left-stick-panel"))
+            assertEquals(right,bounds("right-stick-panel"))
+            assertEquals(dock,bounds("settings-safety-dock"))
+            assertEquals(screen,bounds("ue-viewport"))
+            if (size.right>0) {
+                applyBars(size,true,statusVisible=true)
+                assertEquals(headerTop,bounds("critical-actions").top)
+                assertEquals(settingsTop,bounds("settings-panel").top)
+                assertEquals(left,bounds("left-stick-panel"))
+                assertEquals(right,bounds("right-stick-panel"))
+                assertEquals(dock,bounds("settings-safety-dock"))
+                assertEquals(screen,bounds("ue-viewport"))
+                val cutoutHeight=30
+                val cutout=DisplayCutoutCompat(Rect(0,cutoutHeight,0,0),listOf(Rect(760,0,840,cutoutHeight)))
+                applyBars(size,true,cutout=cutout)
+                assertEquals(headerTop+cutoutHeight,bounds("critical-actions").top)
+                assertEquals(settingsTop+cutoutHeight,bounds("settings-panel").top)
+                applyBars(size,true)
+                assertEquals(headerTop,bounds("critical-actions").top)
+                assertEquals(settingsTop,bounds("settings-panel").top)
+            }
+            rule.runOnIdle { settings.value=false }
+            if (size.right>0) {
+                rule.onNodeWithText("UE 画面未接入").assertIsDisplayed()
+                rule.onNodeWithText("尚未连接后端").assertIsDisplayed()
+                save("landscape-offline-side-nav")
+            }
+        }
     }
     @Test fun fourDirectionGesturesAgreeWithTheFixedMap() {
         val values=mutableListOf<Offset>()

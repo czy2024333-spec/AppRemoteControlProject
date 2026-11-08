@@ -26,10 +26,10 @@ import com.vrxfusion.remote.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.*
 
-/** 同一个操控页面根据屏幕尺寸适配布局，不再打开独立横屏窗口。 */
+/** 独立操纵沿用当前窗口，进入后由操纵页固定为横屏。 */
 @Composable
-fun RotorPyScreen(vm: MainViewModel, onBack: () -> Unit) {
-    FlightControlScreen(vm, onBack)
+fun RotorPyScreen(vm: MainViewModel, onBack: () -> Unit, onManageConnection: () -> Unit) {
+    FlightControlScreen(vm, onBack, onManageConnection)
 }
 
 /**

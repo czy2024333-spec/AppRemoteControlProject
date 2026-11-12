@@ -1,0 +1,131 @@
+{
+  "contract_version": "1.0",
+  "device_id": "sim-drone-1",
+  "boot_id": "fixture-boot",
+  "sequence": 500,
+  "server_time_unix_ms": 1700000000000,
+  "simulation_time_s": 10.0,
+  "state_age_ms": 8.0,
+  "online": true,
+  "mode": "HOLD",
+  "coordinate_frame": "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP",
+  "position": {
+    "value": {
+      "x": 2.01,
+      "y": 0.02,
+      "z": 1.0
+    },
+    "source": "SIM_TRUTH",
+    "validity": "VALID",
+    "age_ms": 8.0,
+    "reason": null,
+    "unit": "m"
+  },
+  "velocity": {
+    "value": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "source": "SIM_TRUTH",
+    "validity": "VALID",
+    "age_ms": 8.0,
+    "reason": null,
+    "unit": "m/s"
+  },
+  "attitude": {
+    "value": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "w": 1.0
+    },
+    "source": "SIM_TRUTH",
+    "validity": "VALID",
+    "age_ms": 8.0,
+    "reason": null,
+    "representation": "QUATERNION_XYZW_BODY_TO_WORLD"
+  },
+  "angular_velocity": {
+    "value": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "source": "SIM_TRUTH",
+    "validity": "VALID",
+    "age_ms": 8.0,
+    "reason": null,
+    "reference_frame": "BODY",
+    "unit": "rad/s"
+  },
+  "battery": {
+    "value": null,
+    "source": "UNKNOWN",
+    "validity": "NOT_CONNECTED",
+    "unit": "%"
+  },
+  "gnss": {
+    "value": null,
+    "source": "UNKNOWN",
+    "validity": "NOT_CONNECTED"
+  },
+  "sensors": {
+    "local_position_velocity": {
+      "value": {
+        "sequence": 199,
+        "simulation_time_s": 9.95,
+        "position_m": [
+          2.02,
+          0.01,
+          1.0
+        ],
+        "velocity_m_s": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "source": "SIM_MEASUREMENT",
+      "validity": "VALID",
+      "age_ms": 58.0,
+      "stale_after_ms": 150,
+      "reason": null
+    }
+  },
+  "task": {
+    "task_id": null,
+    "status": "NOT_SUPPORTED"
+  },
+  "alarms": [],
+  "control": {
+    "source": null,
+    "selected_source": null,
+    "pending_source": "APP",
+    "control_epoch": "fixture-epoch",
+    "phase": "WAITING_NEUTRAL",
+    "has_control": null,
+    "lease_required": true,
+    "active": false,
+    "awaiting_neutral": true,
+    "last_applied": null
+  },
+  "protection": {
+    "latched": false,
+    "reason": null,
+    "recovery": null
+  },
+  "protection_reason": null,
+  "target_yaw_rad": 0.1,
+  "environment": {
+    "wind_m_s": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "video": {
+    "source": "UE",
+    "status": "NOT_CONNECTED"
+  }
+}

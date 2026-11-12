@@ -13,7 +13,30 @@ from client import SourceClient, ClientError
 from cluster_client import ClusterClient
 from cluster_manager import ClusterManager
 from unified_server import make_unified_server
-from unified_contract import device_state, receipt, error_detail
+from unified_contract import KNOWN_ERROR_CODES, device_state, receipt, error_detail
+
+
+def hud_fixture_frames():
+    raw = dict(device_id='sim-drone-1',boot_id='fixture-boot',sequence=500,server_time_ms=1700000000000,
+        simulation_time_s=10.,state_age_ms=8.,online=True,mode='HOLD',control_epoch='fixture-epoch',
+        position_m=[2.01,.02,1.],velocity_m_s=[0.,0.,0.],quaternion_xyzw=[0.,0.,0.,1.],
+        angular_velocity_body_rad_s=[0.,0.,0.],sensor_rate_hz=20,selected_source='app',
+        target_yaw_rad=.1,environment={'wind_m_s':[0.,0.,0.]},
+        sensor_measurement=dict(sequence=199,simulation_time_s=9.95,position_m=[2.02,.01,1.],
+            velocity_m_s=[0.,0.,0.]))
+    cases = dict(
+        online=dict(active_source='app',mode='ACTIVE',last_applied=dict(control_epoch='fixture-epoch',
+            source='APP',intent_sequence=3,command_sequence=24)),
+        offline=dict(online=False,loss_reason='MEMBER_LOST',state_age_ms=700.),
+        invalid=dict(velocity_m_s=[float('nan'),0.,0.]),
+        sensor_stale=dict(sensor_measurement=dict(raw['sensor_measurement'],simulation_time_s=6.8)),
+        recovering=dict(mode='PROTECTED',protection_reason='ALTITUDE_STATE_LIMIT',selected_source=None,
+            boundary_recovery=dict(required=True,can_resume=False,blockers=['SPEED'],
+                min_resume_altitude_m=.35,max_resume_altitude_m=9.95,
+                max_resume_horizontal_radius_m=9.95,max_resume_speed_m_s=.05)),
+        waiting_neutral=dict(pending_source='app',selected_source=None),
+    )
+    return {name:device_state(dict(raw,**change)) for name,change in cases.items()}
 
 
 class ContractTests(unittest.TestCase):
@@ -27,6 +50,31 @@ class ContractTests(unittest.TestCase):
         result=error_detail('ACK_OUTCOME_UNKNOWN','未知',command_id='same-id')
         self.assertEqual((result['code'],result['retry_policy']),('OUTCOME_UNKNOWN','QUERY_SAME_COMMAND_ID'))
         self.assertEqual(result['command_id'],'same-id')
+
+    def test_hud_error_categories_keep_raw_codes(self):
+        cases = [(code,code,'USER_ACTION_REQUIRED') for code in sorted(KNOWN_ERROR_CODES)]
+        cases += [('AUDIT_UNAVAILABLE','SERVICE_DEGRADED','RETRY_LATER'),
+                  ('SCHEDULER_STALL','SERVICE_DEGRADED','RETRY_LATER'),
+                  ('READ_ONLY','FORBIDDEN','USER_ACTION_REQUIRED'),
+                  ('DEVICE_FORBIDDEN','FORBIDDEN','USER_ACTION_REQUIRED'),
+                  ('NEW_ERROR','UNKNOWN_ERROR','USER_ACTION_REQUIRED')]
+        for raw, category, retry in cases:
+            with self.subTest(raw=raw):
+                detail = error_detail(raw,'消息')
+                self.assertEqual((detail['raw_code'],detail['code'],detail['retry_policy']),(raw,category,retry))
+
+    def test_hud_quality_and_control_fixtures(self):
+        frames = hud_fixture_frames()
+        for name, frame in frames.items():
+            path = Path(__file__).with_name('契约样例_v0.9')/'hud'/f'{name}.json'
+            self.assertEqual(json.loads(path.read_text(encoding='utf-8')),frame)
+        self.assertEqual(frames['offline']['position']['reason'],'MEMBER_LOST')
+        self.assertEqual(frames['invalid']['velocity']['validity'],'INVALID')
+        self.assertEqual(frames['invalid']['position']['validity'],'VALID')
+        self.assertEqual(frames['sensor_stale']['sensors']['local_position_velocity']['reason'],'SAMPLE_TOO_OLD')
+        self.assertEqual(frames['recovering']['protection']['recovery']['blockers'],['SPEED'])
+        self.assertTrue(frames['online']['control']['active'])
+        self.assertTrue(frames['waiting_neutral']['control']['awaiting_neutral'])
 
 
 class UnifiedTests(unittest.TestCase):

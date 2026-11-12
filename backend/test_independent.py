@@ -1,5 +1,6 @@
 """三机独立控制、共享观察及权限隔离的真实 HTTP 回归。"""
 import concurrent.futures
+from contextlib import contextmanager
 import copy
 import http.client
 import json
@@ -9,6 +10,7 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
+import numpy as np
 from async_audit import AsyncAudit
 from client import ClientError
 from independent_client import IndependentClient
@@ -75,18 +77,28 @@ class IndependentTests(unittest.TestCase):
         self.directory = temporary_directory()
         self.config = json.loads(Path('cluster_config.json').read_text('utf-8'))
         self.credentials = json.loads(Path('independent_credentials.json').read_text('utf-8'))
+        self.start_instance()
+
+    def start_instance(self):
         self.fleet = IndependentFleet(self.config,self.credentials,self.directory.name)
-        self.server = make_independent_server(self.fleet,port=0,allowed_origins=['http://localhost:5173'])
+        try:
+            self.server = make_independent_server(self.fleet,port=0,allowed_origins=['http://localhost:5173'])
+        except OSError:
+            self.fleet.close()
+            raise
         self.thread = threading.Thread(target=lambda:self.server.serve_forever(poll_interval=.02),daemon=True)
         self.thread.start()
         self.url = f'http://127.0.0.1:{self.server.server_port}'
         self.clients = [IndependentClient(row['device_id'],row['token'],self.url)
             for row in self.credentials['credentials'][:3]]
 
-    def tearDown(self):
+    def stop_instance(self):
         for client in self.clients:
             client.close()
         self.server.shutdown(); self.server.server_close(); self.fleet.close()
+
+    def tearDown(self):
+        self.stop_instance()
         self.directory.cleanup()
 
     def request(self, path, body=None, index=3, headers=None):
@@ -102,6 +114,204 @@ class IndependentTests(unittest.TestCase):
 
     def activate(self, client):
         client.open_session(); client.switch('app'); client.neutral(); client.begin_intent()
+
+    @contextmanager
+    def open_stream(self, path='/api/v1/events', last_id=None, index=3):
+        connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=3)
+        headers = {'Authorization':'Bearer '+self.credentials['credentials'][index]['token']}
+        if last_id is not None:
+            headers['Last-Event-ID'] = last_id
+        try:
+            connection.request('GET',path,headers=headers)
+            response = connection.getresponse()
+            self.assertEqual(response.status,200)
+            yield response
+        finally:
+            connection.close()
+
+    def read_event(self, response):
+        fields = {}
+        while line := response.readline():
+            line = line.rstrip(b'\r\n')
+            if not line and fields:
+                return fields
+            if line.startswith(b': '):
+                fields['comment'] = line[2:].decode()
+            elif line.startswith(b'id: '):
+                fields['id'] = line[4:].decode()
+            elif line.startswith(b'data: '):
+                fields['data'] = json.loads(line[6:])
+        self.fail('状态流意外结束')
+
+    def test_state_stream_reconnect_retains_order_and_reprojects_permissions(self):
+        with self.open_stream(index=0) as response:
+            first = self.read_event(response)
+        self.assertEqual(first['data']['self_device_id'],'sim-drone-1')
+        time.sleep(.16)
+        with self.open_stream(last_id=first['id']) as response:
+            replay = self.read_event(response)
+            self.assertTrue(replay['data']['replayed'])
+            self.assertIsNone(replay['data']['self_device_id'])
+            self.assertFalse(any(m['control']['write_permitted'] for m in replay['data']['members']))
+            self.assertEqual(int(replay['id'].split(':')[-1]),int(first['id'].split(':')[-1])+1)
+        with self.open_stream(last_id='old-boot/fleet/-/0:1') as response:
+            self.assertEqual(self.read_event(response),{'comment':'resync'})
+            fresh = self.read_event(response)
+            self.assertFalse(fresh['data']['replayed'])
+            self.assertEqual(len(fresh['data']['members']),3)
+
+    def test_stream_resume_header_is_allowed_for_an_approved_origin(self):
+        connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=3)
+        try:
+            connection.request('OPTIONS','/api/v1/events',headers={
+                'Origin':'http://localhost:5173','Access-Control-Request-Method':'GET',
+                'Access-Control-Request-Headers':'Authorization, Last-Event-ID'})
+            response = connection.getresponse()
+            self.assertEqual(response.status,204)
+            self.assertIn('Last-Event-ID',response.getheader('Access-Control-Allow-Headers'))
+        finally:
+            connection.close()
+
+    def test_stream_heartbeat_does_not_publish_a_fake_state(self):
+        for service in self.fleet.members.values():
+            service.close()
+        with self.open_stream() as response:
+            first = self.read_event(response)
+            deadline = time.monotonic()+2.3
+            self.assertIn('data',first)
+            while time.monotonic() < deadline:
+                event = self.read_event(response)
+                if event.get('comment') == 'heartbeat':
+                    self.assertNotIn('data',event)
+                    self.assertTrue(self.server.state_feed.status()['healthy'])
+                    break
+            else:
+                self.fail('状态停更后未收到心跳')
+
+    def test_publisher_exception_closes_stream_and_keeps_snapshots_available(self):
+        original = self.fleet.fleet_snapshot
+
+        def fail_publish(states=None):
+            if states is not None:
+                raise RuntimeError('模拟共享发布异常')
+            return original()
+
+        with self.open_stream() as response:
+            self.assertIn('data',self.read_event(response))
+            with self.assertLogs(level='ERROR'), patch.object(self.fleet,'fleet_snapshot',fail_publish):
+                self.server.state_feed.thread.join(2)
+                self.assertFalse(self.server.state_feed.thread.is_alive())
+            # 已经在 TCP 缓冲中的旧状态允许到达，但断流前不再发注释心跳。
+            self.assertNotIn(b': heartbeat',response.read())
+        status, payload = self.request('/api/health')
+        self.assertEqual(status,503)
+        publisher = payload['data']['state_publisher']
+        self.assertFalse(publisher['healthy'])
+        self.assertFalse(publisher['thread_alive'])
+        self.assertEqual(publisher['reason'],'STATE_PUBLISHER_FAILED')
+        for path in ('/api/v1/events','/api/v1/devices/sim-drone-1/events','/api/devices/sim-drone-1/events'):
+            with self.subTest(path=path):
+                status, payload = self.request(path)
+                self.assertEqual(status,503)
+                self.assertEqual(payload['error_code'],'STATE_PUBLISHER_UNAVAILABLE')
+                self.assertEqual(payload['error_detail']['code'],'SERVICE_DEGRADED')
+        self.assertEqual(self.request('/api/v1/state')[0],200)
+
+    def test_publisher_stall_closes_stream_while_thread_is_alive(self):
+        entered, release = threading.Event(), threading.Event()
+        original = self.fleet.fleet_snapshot
+
+        def block_publish(states=None):
+            if states is not None:
+                entered.set()
+                release.wait(5.)
+            return original(states)
+
+        with self.open_stream() as response:
+            self.assertIn('data',self.read_event(response))
+            with patch.object(self.fleet,'fleet_snapshot',block_publish):
+                try:
+                    self.assertTrue(entered.wait(1.))
+                    self.assertNotIn(b': heartbeat',response.read())
+                    status, payload = self.request('/api/health')
+                    self.assertEqual(status,503)
+                    publisher = payload['data']['state_publisher']
+                    self.assertTrue(publisher['thread_alive'])
+                    self.assertEqual(publisher['reason'],'STATE_PUBLISHER_STALLED')
+                    self.assertGreaterEqual(publisher['progress_age_ms'],publisher['progress_timeout_ms'])
+                finally:
+                    release.set()
+        deadline = time.monotonic()+1.
+        while not self.server.state_feed.status()['healthy'] and time.monotonic()<deadline:
+            time.sleep(.01)
+        with self.open_stream() as response:
+            self.assertIn('data',self.read_event(response))
+        self.assertEqual(self.request('/api/v1/state')[0],200)
+
+    def test_capabilities_advertise_hud_and_stream_features_as_booleans(self):
+        status, payload = self.request('/api/v1/capabilities')
+        self.assertEqual(status,200)
+        data = payload['data']
+        self.assertEqual(data['contract_version'],'1.0')
+        for key in ('hud_state_metadata','sse_comment_heartbeat','sse_resume','sse_focus','state_publisher_health'):
+            self.assertIs(data['capabilities'][key],True)
+        self.assertTrue(all(type(value) is bool for value in data['capabilities'].values()))
+
+    def test_boundary_recovery_matches_legacy_and_unified_for_same_snapshot(self):
+        service = self.fleet.members['sim-drone-1']
+        # 停止工作线程，保证两次真实 HTTP 请求读取同一发布序号及仍有阻塞项的恢复状态。
+        service.close()
+        service.core._state['x'] = np.array([0.,0.,.299])
+        service.core.protect('ALTITUDE_STATE_LIMIT')
+        service.publish()
+        old_status, old = self.request('/api/devices/sim-drone-1/state')
+        new_status, new = self.request('/api/v1/devices/sim-drone-1/state')
+        self.assertEqual((old_status,new_status),(200,200))
+        old, new = old['data'],new['data']
+        self.assertEqual((new['boot_id'],new['sequence']),(old['boot_id'],old['sequence']))
+        self.assertIn('ALTITUDE',old['boundary_recovery']['blockers'])
+        self.assertEqual(new['protection']['recovery'],old['boundary_recovery'])
+        status, payload = self.request('/api/v1/state')
+        self.assertEqual(status,200)
+        overview = next(row for row in payload['data']['members'] if row['device_id']==old['device_id'])
+        self.assertEqual((overview['boot_id'],overview['sequence']),(old['boot_id'],old['sequence']))
+        self.assertEqual(overview['protection']['recovery'],old['boundary_recovery'])
+
+    def test_focus_stream_keeps_full_self_and_explicit_sparse_peers(self):
+        with self.open_stream('/api/v1/events?focus=sim-drone-2',index=1) as response:
+            first = self.read_event(response)['data']
+            self.assertEqual(first['focus_device_id'],'sim-drone-2')
+            self.assertTrue(first['partial'])
+            self.assertTrue(first['peers_included'])
+            self.assertEqual(len(first['members']),3)
+            rows = {m['device_id']:m for m in first['members']}
+            self.assertTrue(rows['sim-drone-2']['control']['write_permitted'])
+            self.assertIn('yaw',rows['sim-drone-1'])
+            self.assertNotIn('control',rows['sim-drone-1'])
+            self.assertFalse(self.read_event(response)['data']['peers_included'])
+        self.assertEqual(self.request('/api/v1/events?focus=unknown')[0],404)
+
+    def test_control_state_reports_applied_motion_and_clears_on_new_epoch(self):
+        app = self.clients[0]
+        app.open_session()
+        app.switch('app')
+        path = '/api/v1/devices/sim-drone-1/state'
+        state = lambda: self.request(path)[1]['data']['control']
+        waiting = state()
+        self.assertTrue(waiting['awaiting_neutral'])
+        self.assertFalse(waiting['active'])
+        app.neutral(); app.begin_intent()
+        selected = state()
+        self.assertEqual(selected['phase'],'SOURCE_SELECTED')
+        self.assertFalse(selected['active'])
+        command = app.control(vx=.1)
+        active = state()
+        self.assertTrue(active['active'])
+        self.assertEqual(active['last_applied']['command_sequence'],command['accepted_command_sequence'])
+        app.heartbeat()
+        self.assertEqual(state()['last_applied'],active['last_applied'])
+        app.stop()
+        self.assertIsNone(state()['last_applied'])
 
     def test_every_viewer_sees_three_members_and_only_own_permission(self):
         for i in range(4):
@@ -275,6 +485,62 @@ class IndependentTests(unittest.TestCase):
             self.clients[0].control(vx=.1)
         self.assertEqual(raised.exception.payload['error_code'],'AUDIT_UNAVAILABLE')
 
+    def test_audit_failure_does_not_rotate_existing_protection_repeatedly(self):
+        app = self.clients[0]
+        self.activate(app)
+        app.discrete('/api/protect')
+        self.fleet.audit._fail('TEST_DISK_FAILURE')
+        service = self.fleet.members['sim-drone-1']
+        deadline = time.monotonic()+.5
+        while time.monotonic()<deadline and not service._audit_fault_applied:
+            time.sleep(.01)
+        self.assertTrue(service._audit_fault_applied)
+        # 等待一次发布，验证控制轮次随后保持稳定且 STOP 仍可执行。
+        time.sleep(.06)
+        epoch = service.state()['control_epoch']
+        time.sleep(.06)
+        self.assertEqual(service.state()['control_epoch'],epoch)
+        self.assertEqual(self.request('/api/v1/state')[1]['data']['link']['audit'],'UNAVAILABLE')
+        app.stop()
+
+    def test_audit_write_failure_requires_restart_and_fresh_control_session(self):
+        app = self.clients[0]
+        self.activate(app)
+        self.assertEqual(app.control(vx=.1)['mode'],'ACTIVE')
+        old_input = dict(app.envelope(),intent_sequence=0,frame='world',axes=[.1,0,0,0])
+        fleet_boot = self.fleet.boot_id
+        member_boot = self.fleet.members[app.device_id].boot_id
+        with patch.object(self.fleet.audit,'_write',side_effect=OSError('模拟磁盘写入失败')):
+            self.assertTrue(self.fleet.audit.emit({'event':'TEST_WRITE_FAILURE'}))
+            self.fleet.audit.thread.join(2.)
+        self.assertTrue(self.fleet.audit.failure.startswith('AUDIT_WRITE_FAILED:'))
+        deadline = time.monotonic()+1.
+        service = self.fleet.members[app.device_id]
+        while service.state()['mode']!='PROTECTED' and time.monotonic()<deadline:
+            time.sleep(.01)
+        # 底层写入恢复也不解除已锁存的审计故障，原会话可请求停止但不能解除保护。
+        self.assertEqual(app.stop()['mode'],'PROTECTED')
+        self.assertEqual(app.discrete('/api/protect')['mode'],'PROTECTED')
+        with self.assertRaises(ClientError) as raised:
+            app.discrete('/api/resume',neutral_confirmed=True)
+        self.assertEqual(raised.exception.payload['error_code'],'AUDIT_UNAVAILABLE')
+        self.stop_instance()
+        self.start_instance()
+        self.assertNotEqual(self.fleet.boot_id,fleet_boot)
+        self.assertNotEqual(self.fleet.members[app.device_id].boot_id,member_boot)
+        status, health = self.request('/api/health')
+        self.assertEqual(status,200)
+        self.assertEqual(health['data']['boot_id'],self.fleet.boot_id)
+        _, fresh = self.request('/api/v1/state')
+        self.assertTrue(all(row['mode']=='HOLD' and row['control']['source'] is None and
+            row['control']['selected_source'] is None for row in fresh['data']['members']))
+        old_input['sent_at_ms'] = time.time()*1000
+        status, payload = self.request('/api/v1/devices/sim-drone-1/input',old_input,index=0)
+        self.assertEqual(status,409)
+        self.assertEqual(payload['error_code'],'STALE_SESSION')
+        self.activate(self.clients[0])
+        self.assertEqual(self.clients[0].control(vx=.1)['mode'],'ACTIVE')
+
     def test_expired_and_old_epoch_are_rejected_and_stop_is_idempotent(self):
         app = self.clients[0]; self.activate(app)
         old = app.envelope(); old.update(intent_sequence=0,frame='world',axes=[.1,0,0,0])
@@ -282,14 +548,41 @@ class IndependentTests(unittest.TestCase):
         path = '/api/v1/devices/sim-drone-1/stop'
         code, first = self.request(path,stop,index=0)
         self.assertEqual(code,200,first)
+        epoch = first['data']['control_epoch']
+        self.assertNotEqual(epoch,stop['control_epoch'])
+        self.assertEqual(first['data']['mode'],'HOLD')
+        self.assertIsNone(first['data']['last_applied'])
         code, replay = self.request(path,stop,index=0)
         self.assertEqual(code,200,replay)
         self.assertTrue(replay['data']['idempotent_replay'])
+        self.assertEqual(replay['data']['control_epoch'],epoch)
         self.assertEqual(self.request('/api/v1/devices/sim-drone-1/input',old,index=0)[0],409)
         expired = app.envelope(); expired.update(command_id='expired',sent_at_ms=time.time()*1000-1000)
         self.assertEqual(self.request('/api/v1/devices/sim-drone-1/protect',expired,index=0)[1]['error_code'],'EXPIRED_COMMAND')
-        self.assertEqual(self.request('/api/v1/devices/sim-drone-1/commands/app/stop-once',index=0)[0],200)
+        status, result = self.request('/api/v1/devices/sim-drone-1/commands/app/stop-once',index=0)
+        self.assertEqual(status,200)
+        self.assertEqual(result['data']['command_id'],'stop-once')
+        self.assertEqual(result['data']['phase'],'COMPLETED')
+        self.assertEqual(result['data']['completion_scope'],'SERVICE_APPLIED')
         self.assertEqual(self.request('/api/v1/devices/sim-drone-1/commands/app/stop-once')[0],403)
+
+    def test_discrete_id_cannot_be_reused_for_a_different_safety_action(self):
+        app = self.clients[0]
+        self.activate(app)
+        prefix = '/api/v1/devices/sim-drone-1'
+        stop = dict(app.envelope(),command_id='safety-id')
+        code, result = self.request(prefix+'/stop',stop,index=0)
+        self.assertEqual(code,200)
+        code, error = self.request(prefix+'/protect',stop,index=0)
+        self.assertEqual(code,409)
+        self.assertEqual(error['error_code'],'COMMAND_ID_REUSED')
+        self.assertEqual(error['error_detail']['code'],'COMMAND_ID_REUSED')
+        self.assertEqual(self.request(prefix+'/state')[1]['data']['mode'],'HOLD')
+        # 新 ID 使用当前轮次和序号，保护仍可正常执行。
+        protect = dict(app.envelope(),command_id='new-protect',control_epoch=result['data']['control_epoch'])
+        code, result = self.request(prefix+'/protect',protect,index=0)
+        self.assertEqual(code,200)
+        self.assertEqual(result['data']['mode'],'PROTECTED')
 
     def test_sse_contains_all_three_members_for_observer(self):
         connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=3)

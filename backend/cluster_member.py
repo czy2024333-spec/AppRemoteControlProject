@@ -2,8 +2,6 @@
 import copy
 import json
 import math
-import time
-import threading
 from pathlib import Path
 import numpy as np
 from app_server import SimulationService
@@ -46,15 +44,14 @@ def validate_member(spec):
 
 class ManagedMember(SimulationService):
     def __init__(self, spec, cluster_id, tokens, directory, audit_sink=None):
-        self.publication_lock = threading.RLock()
         self.spec, control = validate_member(spec)
         self.cluster_id = cluster_id
         self.rng = np.random.default_rng(spec['sensors']['seed'])
         self.measurement = None
         self.next_measurement_s = 0.
         self.sensor_sequence = 0
-        self.last_step_at = time.monotonic()
-        self.last_step_sequence = -1
+        self._instance_config = None
+        self._instance_config_version = None
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
         cfg = json.loads((Path(__file__).parent/'core/lab_config.json').read_text(encoding='utf-8'))
@@ -64,48 +61,42 @@ class ManagedMember(SimulationService):
         core = SimulationCore(cfg_path)
         control_path = directory/'control.json'
         # 各成员受限控制策略独立持久化；没有保存值时使用注册配置。
-        if control_path.exists():
+        persisted = control_path.exists()
+        if persisted:
             control = validate_control(json.loads(control_path.read_text(encoding='utf-8')))
         super().__init__(core, tokens=tokens, config=control, config_path=control_path, audit_sink=audit_sink)
+        self.control_config_origin = 'FILE' if persisted else 'REGISTRY'
         self.device_id = spec['device_id']
         self.audit_path = directory/'control_events.jsonl'
         self.publish()
 
-    def publish(self):
-        # 连同传感器及集群字段整体发布，读取者不能看见只更新一半的成员状态。
-        with self.publication_lock:
-            self._publish_complete()
-
-    def state(self):
-        with self.publication_lock:
-            return super().state()
-
-    def _publish_complete(self):
+    def build_state(self, raw):
         # 独立随机源只作用于测量，不污染动力学真值、控制反馈或其他实例。
-        sequence = self.core.get_state()['sequence']
-        if sequence != self.last_step_sequence:
-            self.last_step_at = time.monotonic()
-            self.last_step_sequence = sequence
         sensor = self.spec['sensors']
-        if sensor['enabled'] and self.core.time_s + 1e-9 >= self.next_measurement_s:
-            raw = self.core.get_state()['state']
+        sim_time = raw['time_s']
+        if sensor['enabled'] and sim_time + 1e-9 >= self.next_measurement_s:
+            truth = raw['state']
             self.sensor_sequence += 1
             self.measurement = dict(kind='SIMULATED_LOCAL_POSITION_VELOCITY', quality='SIMULATED',
-                sequence=self.sensor_sequence, simulation_time_s=self.core.time_s,
-                position_m=(np.array(raw['x'])+self.rng.normal(0,sensor['position_std_m'],3)).tolist(),
-                velocity_m_s=(np.array(raw['v'])+self.rng.normal(0,sensor['velocity_std_m_s'],3)).tolist(),
+                sequence=self.sensor_sequence, simulation_time_s=sim_time,
+                position_m=(np.array(truth['x'])+self.rng.normal(0,sensor['position_std_m'],3)).tolist(),
+                velocity_m_s=(np.array(truth['v'])+self.rng.normal(0,sensor['velocity_std_m_s'],3)).tolist(),
                 position_std_m=sensor['position_std_m'], velocity_std_m_s=sensor['velocity_std_m_s'])
             # 绝对仿真时间节拍避免30Hz等不能整除100Hz的采样逐步降成25Hz。
-            periods = math.floor(self.core.time_s * sensor['rate_hz'] + 1e-8) + 1
+            periods = math.floor(sim_time * sensor['rate_hz'] + 1e-8) + 1
             self.next_measurement_s = periods / sensor['rate_hz']
-        super().publish()
-        with self.lock:
+        # 兼容旧接口的 instance_config。配置版本变化时才创建新对象。
+        if self._instance_config_version != self.config_version:
             config = copy.deepcopy(self.spec)
             config['control'] = copy.deepcopy(self.config)
-            self.latest.update(implementation_version=IMPLEMENTATION_VERSION, cluster_id=self.cluster_id,
-                member_boot_id=self.boot_id,
-                device_id=self.spec['device_id'], sensor_measurement=copy.deepcopy(self.measurement),
-                instance_config=config, state_stream_target_hz=self.spec['state']['stream_hz'])
+            self._instance_config = config
+            self._instance_config_version = self.config_version
+        state = super().build_state(raw)
+        state.update(implementation_version=IMPLEMENTATION_VERSION, cluster_id=self.cluster_id,
+            member_boot_id=self.boot_id, device_id=self.spec['device_id'], sensor_measurement=self.measurement,
+            sensor_rate_hz=sensor['rate_hz'], control_config_origin=self.control_config_origin,
+            instance_config=self._instance_config, state_stream_target_hz=self.spec['state']['stream_hz'])
+        return state
 
     def execute(self, item):
         # 仅管理器内部调用；HTTP路由与批分发白名单均不暴露此路径。

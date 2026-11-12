@@ -227,7 +227,9 @@ class ClusterTests(unittest.TestCase):
         restored=ManagedMember(self.config['members'][0],self.manager.cluster_id,DEMO_TOKENS,
                                self.directory/'sim-drone-1')
         self.assertEqual(restored.state()['control_config']['sensitivity'],.6)
+        self.assertEqual(restored.state()['control_config_origin'],'FILE')
         self.assertEqual(self.manager.member_state('sim-drone-2')['control_config']['sensitivity'],.8)
+        self.assertEqual(self.manager.member_state('sim-drone-2')['control_config_origin'],'REGISTRY')
         restored.close()
 
 

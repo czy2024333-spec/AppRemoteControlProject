@@ -1,8 +1,20 @@
 """统一只读模型与回执语义；不代替会话/权限/控制权验证，不伪造未接入的数据。"""
+import copy
 import math
 from runtime_info import IMPLEMENTATION_VERSION, UNIFIED_PROTOCOL_VERSION
 
 COORDINATE_FRAME='SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP'
+KNOWN_ERROR_CODES = frozenset("""
+    ACK_TIMEOUT BARRIER_FAILED BOUNDARY_RECOVERY_PENDING CAPACITY_LIMIT CLOCK_SKEW
+    COMMAND_HISTORY_FULL COMMAND_ID_REUSED COMMAND_NOT_FOUND CONFIG_SAVE_FAILED CONFIG_VERSION_CONFLICT
+    CONFIRMATION_REQUIRED CORE_REJECTED CORS_HEADERS_NOT_ALLOWED CORS_METHOD_NOT_ALLOWED
+    DEPLOYMENT_MODE_MISMATCH DEVICE_ID_REUSED DISCONNECTED GROUP_NOT_FOUND HISTORY_FULL INVALID_CONFIG
+    INVALID_MEMBERS LOG_BUSY LOG_DATA_CORRUPT LOG_EXPORT_TOO_LARGE LOG_INDEX_BUILDING
+    LOG_INDEX_UNAVAILABLE LOG_QUERY_TIMEOUT LOG_READ_FAILED LOG_SNAPSHOT_EXPIRED MEMBER_NOT_FOUND
+    MODE_NOT_ALLOWED NOT_FOUND NO_PENDING_CONFIRMATION PROTECTED QUEUE_FULL REQUEST_ID_REUSED
+    REQUEST_REJECTED RETIRED_INPUT SENSOR_CAPACITY_LIMIT STALE_CLUSTER_SEQUENCE STALE_DEVICE_EVENT
+    STALE_SEQUENCE TARGET_DISCONNECTED TASK_NOT_SUPPORTED USER_ACTION_REQUIRED WRONG_CLUSTER WRONG_DEVICE
+""".split())
 
 
 def measurement(value,unit=None,source='UNKNOWN',validity='NOT_CONNECTED',**fields):
@@ -11,11 +23,41 @@ def measurement(value,unit=None,source='UNKNOWN',validity='NOT_CONNECTED',**fiel
     return result
 
 
-def vector(value,names,online,unit=None,**fields):
+def vector(value,names,online,unit=None,*,age_ms=None,loss_reason=None,**fields):
     valid=isinstance(value,(list,tuple)) and len(value)==len(names) and all(
         type(v) in (int,float) and math.isfinite(v) for v in value)
+    if not valid:
+        validity,reason='INVALID','NON_FINITE_OR_BAD_SHAPE'
+    elif not online:
+        validity,reason='STALE',loss_reason or 'LINK_LOST'
+    else:
+        validity,reason='VALID',None
     return measurement(dict(zip(names,value)) if valid else None,unit,'SIM_TRUTH',
-        'STALE' if valid and not online else 'VALID' if valid else 'INVALID',**fields)
+        validity,age_ms=age_ms,reason=reason,**fields)
+
+
+def sensor_channel(raw, online):
+    sample=raw.get('sensor_measurement')
+    if sample is None:
+        return measurement(None,age_ms=None,stale_after_ms=None,reason='NO_SAMPLE')
+    sensor=raw.get('instance_config',{}).get('sensors',{})
+    rate=raw.get('sensor_rate_hz',sensor.get('rate_hz'))
+    threshold=round(3000/rate) if rate else None
+    sample_time=sample.get('simulation_time_s')
+    if type(sample_time) not in (int,float) or not math.isfinite(sample_time):
+        return measurement(None,source='SIM_MEASUREMENT',validity='INVALID',
+            age_ms=None,stale_after_ms=threshold,reason='INVALID_SAMPLE_TIME')
+    # 测量与状态来自同一仿真时钟，状态停更的时间也计入样本年龄。
+    sim_age=(raw['simulation_time_s']-sample_time)*1000
+    age=max(0.,sim_age)+max(0.,raw.get('state_age_ms') or 0.)
+    if not online:
+        validity,reason='STALE',raw.get('loss_reason') or 'LINK_LOST'
+    elif threshold is not None and age > threshold:
+        validity,reason='STALE','SAMPLE_TOO_OLD'
+    else:
+        validity,reason='VALID',None
+    return measurement(copy.deepcopy(sample),source='SIM_MEASUREMENT',validity=validity,
+        age_ms=round(age,1),stale_after_ms=threshold,reason=reason)
 
 
 def device_descriptor(raw):
@@ -29,8 +71,11 @@ def device_descriptor(raw):
             battery=False,gnss=False,local_position_velocity_measurement=sensor.get('enabled',False),
             autonomous_tasks=False,ue_video=False,hardware_ring_verified=False,hardware_voice_verified=False),
         control_limits={k:raw['control_config'][k] for k in ('sensitivity','deadzone','max_horizontal_speed_m_s',
-            'max_vertical_speed_m_s','max_yaw_rate_rad_s','input_ttl_ms','sources_enabled')},
+            'max_vertical_speed_m_s','max_yaw_rate_rad_s','input_ttl_ms')}
+            | dict(sources_enabled=dict(raw['control_config']['sources_enabled'])),
         control_config_version=raw['config_version'],
+        control_config_origin=raw.get('control_config_origin'),
+        yaw_convention='CCW_FROM_WORLD_X_ABOUT_POSITIVE_Z',
         routes=dict(state=f"/api/v1/devices/{raw['device_id']}/state",
             events=f"/api/v1/devices/{raw['device_id']}/events",
             legacy_control_prefix=f"/api/devices/{raw['device_id']}"))
@@ -41,18 +86,17 @@ def device_state(raw):
     alarms=[]
     if raw.get('protection_reason'): alarms.append(dict(code=raw['protection_reason'],level='DANGER'))
     if not online: alarms.append(dict(code=raw.get('loss_reason') or 'LINK_LOST',level='DANGER'))
-    local=raw.get('sensor_measurement')
-    sensors=dict(local_position_velocity=measurement(local,source='SIM_MEASUREMENT' if local is not None else 'UNKNOWN',
-        validity='STALE' if local is not None and not online else 'VALID' if local is not None else 'NOT_CONNECTED'))
+    sensors=dict(local_position_velocity=sensor_channel(raw,online))
+    freshness=dict(age_ms=raw.get('state_age_ms'),loss_reason=raw.get('loss_reason'))
     return dict(contract_version=UNIFIED_PROTOCOL_VERSION,device_id=raw['device_id'],boot_id=raw['boot_id'],
         sequence=raw['sequence'],server_time_unix_ms=raw['server_time_ms'],
         simulation_time_s=raw['simulation_time_s'],state_age_ms=raw.get('state_age_ms'),
         online=online,mode=raw['mode'],coordinate_frame=COORDINATE_FRAME,
-        position=vector(raw.get('position_m'),'xyz',online,'m'),
-        velocity=vector(raw.get('velocity_m_s'),'xyz',online,'m/s'),
+        position=vector(raw.get('position_m'),'xyz',online,'m',**freshness),
+        velocity=vector(raw.get('velocity_m_s'),'xyz',online,'m/s',**freshness),
         attitude=vector(raw.get('quaternion_xyzw'),'xyzw',online,
-            representation='QUATERNION_XYZW_BODY_TO_WORLD'),
-        angular_velocity=vector(raw.get('angular_velocity_body_rad_s'),'xyz',online,'rad/s',reference_frame='BODY'),
+            representation='QUATERNION_XYZW_BODY_TO_WORLD',**freshness),
+        angular_velocity=vector(raw.get('angular_velocity_body_rad_s'),'xyz',online,'rad/s',reference_frame='BODY',**freshness),
         battery=measurement(None,'%'),gnss=measurement(None),sensors=sensors,
         task=dict(task_id=None,status='NOT_SUPPORTED'),alarms=alarms,
         control=dict(source=(raw.get('active_source') or '').upper() or None,
@@ -60,7 +104,14 @@ def device_state(raw):
             pending_source=(raw.get('pending_source') or '').upper() or None,control_epoch=raw['control_epoch'],
             phase='PROTECTED' if raw['mode']=='PROTECTED' else 'WAITING_NEUTRAL' if raw.get('pending_source') else
                 'SOURCE_SELECTED' if raw.get('selected_source') else 'OBSERVING',
-            has_control=None,lease_required=True),
+            has_control=None,lease_required=True,
+            active=online and raw['mode']!='PROTECTED' and bool(raw.get('active_source')),
+            awaiting_neutral=online and raw['mode']!='PROTECTED' and bool(raw.get('pending_source')),
+            last_applied=copy.deepcopy(raw.get('last_applied'))),
+        protection=dict(latched=raw['mode']=='PROTECTED',reason=raw.get('protection_reason'),
+            recovery=copy.deepcopy(raw.get('boundary_recovery'))),
+        protection_reason=raw.get('protection_reason'),target_yaw_rad=raw.get('target_yaw_rad'),
+        environment=copy.deepcopy(raw.get('environment')),
         video=dict(source='UE',status='NOT_CONNECTED'))
 
 
@@ -112,8 +163,12 @@ def error_detail(code,message,device_id=None,command_id=None):
     elif code in ('NOT_NEUTRAL','NEUTRAL_REQUIRED'): category='NEUTRAL_REQUIRED'
     elif code in ('MEMBER_LOST','SIMULATION_FAILURE'): category='LINK_LOST'
     elif code=='ACK_OUTCOME_UNKNOWN': category='OUTCOME_UNKNOWN'
+    elif code in ('AUDIT_UNAVAILABLE','SCHEDULER_STALL','STATE_PUBLISHER_UNAVAILABLE'): category='SERVICE_DEGRADED'
     elif code in ('NOT_SUPPORTED','COLLABORATION_NOT_IMPLEMENTED'): category='NOT_SUPPORTED'
-    else: category='INPUT_INVALID' if code=='INVALID_ARGUMENT' else code
+    elif code=='INVALID_ARGUMENT': category='INPUT_INVALID'
+    elif code in KNOWN_ERROR_CODES: category=code
+    else: category='UNKNOWN_ERROR'
+    retry={'OUTCOME_UNKNOWN':'QUERY_SAME_COMMAND_ID','SERVICE_DEGRADED':'RETRY_LATER'}
     return dict(code=category,message_key='backend.'+category.lower(),message=message,raw_code=code,
-        retry_policy='QUERY_SAME_COMMAND_ID' if category=='OUTCOME_UNKNOWN' else 'USER_ACTION_REQUIRED',
+        retry_policy=retry.get(category,'USER_ACTION_REQUIRED'),
         device_id=device_id,command_id=command_id)

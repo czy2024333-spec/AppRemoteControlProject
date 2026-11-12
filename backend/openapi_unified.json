@@ -859,6 +859,14 @@
                 "enum": [
                   "m"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -898,6 +906,14 @@
                 "enum": [
                   "m/s"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -930,6 +946,14 @@
                   "INVALID",
                   "NOT_CONNECTED"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -969,6 +993,14 @@
                 "enum": [
                   "rad/s"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -1046,7 +1078,26 @@
             }
           },
           "sensors": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "local_position_velocity": {
+                "type": "object",
+                "properties": {
+                  "age_ms": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stale_after_ms": {
+                    "type": "integer",
+                    "nullable": true
+                  }
+                }
+              }
+            }
           },
           "task": {
             "type": "object"
@@ -1088,8 +1139,73 @@
               },
               "lease_required": {
                 "type": "boolean"
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "awaiting_neutral": {
+                "type": "boolean"
+              },
+              "last_applied": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "intent_sequence": {
+                    "type": "integer"
+                  },
+                  "command_sequence": {
+                    "type": "integer"
+                  }
+                }
               }
             }
+          },
+          "protection": {
+            "type": "object",
+            "properties": {
+              "latched": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "recovery": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "blockers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ALTITUDE",
+                        "RADIUS",
+                        "SPEED"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "protection_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "target_yaw_rad": {
+            "type": "number",
+            "nullable": true
+          },
+          "environment": {
+            "type": "object",
+            "nullable": true
           }
         }
       },

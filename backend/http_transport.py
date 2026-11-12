@@ -40,6 +40,7 @@ def strict_loads(raw):
 
 class JsonHandler(BaseHTTPRequestHandler):
     allowed_origins=frozenset()
+    allowed_request_headers=('Authorization','Content-Type')
 
     def handle_one_request(self):
         self.transport_request_id=uuid.uuid4().hex
@@ -102,11 +103,11 @@ class JsonHandler(BaseHTTPRequestHandler):
             if self.headers.get('Access-Control-Request-Method') not in ('GET','POST'):
                 raise TransportError(403,'不支持预检方法','CORS_METHOD_NOT_ALLOWED')
             requested={h.strip().lower() for h in self.headers.get('Access-Control-Request-Headers','').split(',') if h.strip()}
-            if requested-{'authorization','content-type'}:
+            if requested-{name.lower() for name in self.allowed_request_headers}:
                 raise TransportError(403,'不支持预检请求头','CORS_HEADERS_NOT_ALLOWED')
             self.send_response(204)
             self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers','Authorization, Content-Type')
+            self.send_header('Access-Control-Allow-Headers',', '.join(self.allowed_request_headers))
             self.send_header('Access-Control-Max-Age','600')
             self.send_header('Content-Length','0')
             self.end_headers()

@@ -163,11 +163,9 @@ class ClusterManager:
         entry=self.members.get(name)
         if entry is None: raise APIError(404,'成员不存在','MEMBER_NOT_FOUND')
         service=entry['service']
-        try:
-            state=service.state()
-        except APIError:
-            with service.lock: state=copy.deepcopy(service.latest)
-        age=max(0.,(time.monotonic()-service.last_step_at)*1000)
+        raw, stepped_at = service.published_snapshot()
+        state=copy.deepcopy(raw)
+        age=max(0.,(time.monotonic()-stepped_at)*1000)
         online=entry['online'] and not service.failure and service.thread.is_alive() and age<self.limits['lost_timeout_s']*1000
         state.update(online=bool(online),link_status='ONLINE' if online else 'LOST',
             loss_reason=entry['loss_reason'] or (None if online else 'MEMBER_LOST'),state_age_ms=age,

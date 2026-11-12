@@ -3,6 +3,7 @@ import copy
 import hmac
 from pathlib import Path
 import time
+import threading
 import uuid
 from app_server import APIError, DEMO_TOKENS
 from async_audit import AsyncAudit
@@ -48,13 +49,16 @@ def validate_credentials(value, device_ids):
 
 
 class IndependentMember(ManagedMember):
+    _audit_fault_applied = False
+
     def expire(self):
         # 审计故障不能继续不可追溯的运动；普通断连只影响本机。
-        if self.audit_sink is not None and self.audit_sink.failure is not None:
-            if self.core.get_state()['protection_reason'] != 'AUDIT_UNAVAILABLE':
-                self.core.protect('AUDIT_UNAVAILABLE')
-                self.clear_selection('AUDIT_UNAVAILABLE')
-                self.new_epoch('AUDIT_UNAVAILABLE')
+        if self.audit_sink is not None and self.audit_sink.failure is not None and not self._audit_fault_applied:
+            # 已锁存边界等原因时核心会保留原保护原因，同一次审计故障只处理一次。
+            self._audit_fault_applied = True
+            self.core.protect('AUDIT_UNAVAILABLE')
+            self.clear_selection('AUDIT_UNAVAILABLE')
+            self.new_epoch('AUDIT_UNAVAILABLE')
         super().expire()
 
 
@@ -67,6 +71,7 @@ class IndependentFleet:
         self.identities = validate_credentials(credentials, {s['device_id'] for s in config['members']})
         self.boot_id = uuid.uuid4().hex
         self.members = {}
+        self.state_changed = threading.Event()
         # 审计日志落盘目录；命名避开本类的 directory() 设备目录方法。
         self.results_directory = Path(directory)
         self.audit = AsyncAudit(Path(directory)/'fleet_events.jsonl')
@@ -76,9 +81,11 @@ class IndependentFleet:
                 name = spec['device_id']
                 service = IndependentMember(spec, self.cluster_id, DEMO_TOKENS, Path(directory)/name, self.audit)
                 self.members[name] = service
+                service.state_changed = self.state_changed
                 service.start()
                 self.audit.emit(dict(event='MEMBER_STARTED',device_id=name,boot_id=service.boot_id,
-                    server_time_ms=time.time()*1000))
+                    server_time_ms=time.time()*1000, control_config_origin=service.control_config_origin,
+                    sim_rate_hz=1/service.core.dt))
         except Exception:
             self.close()
             raise
@@ -107,30 +114,30 @@ class IndependentFleet:
             raise APIError(404,'飞机不存在','MEMBER_NOT_FOUND')
         return self.members[name]
 
-    def member_state(self, name):
+    def member_state(self, name, *, copy_state=True):
         service = self._service(name)
-        try:
-            raw = service.state()
-        except APIError:
-            with service.lock:
-                raw = copy.deepcopy(service.latest)
-        age = max(0., (time.monotonic()-service.last_step_at)*1000)
+        state, stepped_at = service.published_snapshot()
+        raw = copy.deepcopy(state) if copy_state else dict(state)
+        age = max(0., (time.monotonic()-stepped_at)*1000)
         online = not service.failure and service.thread.is_alive() and age<self.config['limits']['lost_timeout_s']*1000
         raw.update(online=online,state_age_ms=age,link_status='ONLINE' if online else 'LOST',
             loss_reason=None if online else 'MEMBER_LOST',data_quality='SIMULATION' if online else 'STALE')
         return raw
 
     def view(self, identity, name):
-        raw = self.member_state(name)
-        data = device_state(raw)
+        data = device_state(self.member_state(name, copy_state=False))
         data['is_self'] = identity['device_id'] == name
         # write_permitted 是设备权限，不表示当前已完成会话、切换或归中。
         data['control']['write_permitted'] = identity['role']=='CONTROLLER' and identity['device_id']==name
         return data
 
     def state(self, identity):
+        return self.state_for_identity(self.fleet_snapshot(), identity)
+
+    def fleet_snapshot(self, states=None):
         # 成员快照独立读取；不等待其他飞机的命令或日志，也不触发控制会话。
-        states = [self.member_state(name) for name in sorted(self.members)]
+        if states is None:
+            states = [self.member_state(name, copy_state=False) for name in sorted(self.members)]
         raw = dict(cluster_id=self.cluster_id,boot_id=self.boot_id,revision=1,selection=None,
             groups=copy.deepcopy(self.config['groups']),members=states,server_time_ms=time.time()*1000,
             registered_count=len(states),online_count=sum(s['online'] for s in states),
@@ -138,17 +145,25 @@ class IndependentFleet:
             active_count=sum(s['online'] and s['active_source'] is not None for s in states),
             sensor_enabled_count=sum(s['sensors']['enabled'] for s in self.config['members']))
         data = snapshot(raw)
-        for member in data['members']:
-            member['is_self'] = member['device_id']==identity['device_id']
-            member['control']['write_permitted'] = identity['role']=='CONTROLLER' and member['is_self']
-        data.update(deployment_mode='INDEPENDENT',self_device_id=identity['device_id'],viewer_role=identity['role'],
-            audit=self.audit.status())
+        audit = self.audit.status()
+        data.update(audit=audit, link=dict(audit='OK' if audit['healthy'] else 'UNAVAILABLE'))
+        return data
+
+    def state_for_identity(self, snapshot, identity):
+        data = dict(snapshot)
+        data['members'] = []
+        for member in snapshot['members']:
+            is_self = member['device_id']==identity['device_id']
+            permitted = identity['role']=='CONTROLLER' and is_self
+            data['members'].append(dict(member, is_self=is_self,
+                control=dict(member['control'], write_permitted=permitted)))
+        data.update(deployment_mode='INDEPENDENT',self_device_id=identity['device_id'],viewer_role=identity['role'])
         return data
 
     def directory(self, identity):
         devices = []
         for name in sorted(self.members):
-            row = device_descriptor(self.member_state(name))
+            row = device_descriptor(self.member_state(name, copy_state=False))
             row.update(is_self=identity['device_id']==name,
                 write_permitted=identity['role']=='CONTROLLER' and identity['device_id']==name)
             row['routes']['control_prefix'] = '/api/v1/devices/'+name
@@ -164,7 +179,9 @@ class IndependentFleet:
             writable_device_ids=[identity['device_id']] if identity['role']=='CONTROLLER' else [],
             capabilities=dict(independent_control=True,cluster_control=False,unified_intent_write=False,
                 device_bound_legacy_write=True,directory=True,unified_state=True,unified_receipts=True,
-                ue_video=False,formal_user_roles=False,logs_query=True,logs_export=True),
+                ue_video=False,formal_user_roles=False,logs_query=True,logs_export=True,
+                hud_state_metadata=True,sse_comment_heartbeat=True,sse_resume=True,sse_focus=True,
+                state_publisher_health=True),
             control_policy=dict(default_frame='WORLD',axes_order=['X','Y','Z','YAW'],
                 input_ttl_max_ms=500,state_stream_target_hz=25,observe_grants_control=False,
                 source_switch='USER_SWITCH_NEUTRAL',one_session_per_device_source=True,
@@ -182,7 +199,7 @@ class IndependentFleet:
         if body.get('cluster_id') != self.cluster_id:
             raise APIError(400,'集群标识不匹配','WRONG_CLUSTER')
         service = self._service(name)
-        if not self.member_state(name)['online']:
+        if not self.member_state(name, copy_state=False)['online']:
             raise APIError(503,'该飞机失联，拒绝指令','MEMBER_LOST')
         if path == '/api/session' and body.get('user_initiated') is not True:
             raise APIError(400,'申请或替换会话须由用户主动操作','USER_ACTION_REQUIRED')
@@ -214,5 +231,5 @@ class IndependentFleet:
         members = [service.health() for service in self.members.values()]
         audit = self.audit.status()
         return dict(mode='independent',implementation_version=IMPLEMENTATION_VERSION,
-            healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit,
+            boot_id=self.boot_id,healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit,
             logs_index=self.logs_index.status())

@@ -17,6 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vrxfusion.remote.MainViewModel
+import com.vrxfusion.remote.ui.design.GroupedCard
+import com.vrxfusion.remote.ui.design.LargeTitleHeader
+import com.vrxfusion.remote.ui.design.NavBackButton
+import com.vrxfusion.remote.ui.design.StatusPill
 import com.vrxfusion.remote.unified.*
 import com.vrxfusion.remote.ui.theme.*
 import kotlin.math.*
@@ -31,16 +35,20 @@ fun ClusterMonitorScreen(vm: MainViewModel,onBack: ()->Unit,onManageConnection: 
     val running by c.running.collectAsState()
     val hz by c.receiveHz.collectAsState()
     val error by c.error.collectAsState()
-    Column(Modifier.fillMaxSize().background(BgDark).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-            Text("三机总览",fontSize=24.sp,fontWeight=FontWeight.Bold,color=TextPrimary,modifier=Modifier.testTag("fleet-title"))
-            TextButton(onClick=onBack) { Text("返回") }
+    Column(Modifier.fillMaxSize().background(BgDark).safeDrawingPadding().verticalScroll(rememberScrollState())
+        .padding(horizontal=20.dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        // iOS 导航栏：左上角「‹ 返回」，下方大标题。
+        NavBackButton("返回", onBack)
+        LargeTitleHeader("三机总览", Modifier.testTag("fleet-title"))
+        Text("统一地址 · 只读观察 · 筛选不接管设备",color=TextSecondary,fontSize=13.sp)
+        GroupedCard {
+            BackendConnectionSummary(vm,onManageConnection)
         }
-        Text("统一地址 · 只读观察 · 筛选不接管设备",color=AccentBlue,fontSize=12.sp)
-        BackendConnectionSummary(vm,onManageConnection)
         error?.let { Text(it,color=WarnAmber) }
-        Text(if (connected) "● 统一状态  %.1f Hz".format(hz) else "● 未连接 / 历史状态",color=if (connected) VirtualGreen else WarnAmber)
+        val statusColor = if (connected) VirtualGreen else WarnAmber
+        StatusPill(statusColor) {
+            Text(if (connected) "统一状态  %.1f Hz".format(hz) else "未连接 / 历史状态", color = statusColor)
+        }
         state?.let { UnifiedFleetContent(it,directory,connected) { m->c.fresh(m) } }
     }
 }
@@ -60,11 +68,13 @@ fun UnifiedFleetContent(state: UnifiedSnapshot,directory: UnifiedDirectory?,conn
         FilterChip(selected=group==null,onClick={group=null},label={Text("全部成员")})
         state.groups.keys.forEach { name->FilterChip(selected=group==name,onClick={group=name},label={Text(name)}) }
     }
+    // 筛选只改变显示：明确告知隐藏了几架，避免误以为设备丢失。
+    if (group!=null) Text("已筛选「$group」· 隐藏 ${state.members.size-shown.size} 架 · 仅改变显示",color=AccentBlue,fontSize=12.sp)
     FleetMap(shown,state.self_device_id) { connected && memberFresh(it) }
     shown.forEach { m ->
         val fresh=connected && memberFresh(m)
         val descriptor=directory?.devices?.find { it.device_id==m.device_id }
-        Column(Modifier.fillMaxWidth().background(SurfaceCard,RoundedCornerShape(16.dp)).padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        GroupedCard(radius = 20.dp, spacing = 6.dp) {
             Text(descriptor?.name?.ifBlank { m.device_id } ?: m.device_id,color=TextPrimary,fontSize=18.sp,fontWeight=FontWeight.Bold)
             val source=when(m.position.source) { "SIM_TRUTH"->"仿真真值";"SIM_MEASUREMENT"->"模拟测量";"REAL"->"实机数据";else->"来源未确认" }
             Text(if (fresh) "$source · ${modeLabel(m.mode)}" else "状态过期或无效 · 仅供历史参考",color=if (fresh) VirtualGreen else WarnAmber,fontSize=12.sp)
@@ -86,7 +96,7 @@ fun modeLabel(mode: String)=when(mode) { "HOLD"->"悬停";"ACTIVE"->"运动输�
 @Composable
 private fun FleetMap(members: List<UnifiedDeviceState>,selfId: String?,fresh: (UnifiedDeviceState)->Boolean) {
     val markers=fleetMarkers(members,selfId,fresh)
-    Canvas(Modifier.fillMaxWidth().height(190.dp).background(SurfaceDark,RoundedCornerShape(12.dp))) {
+    Canvas(Modifier.fillMaxWidth().height(190.dp).background(SurfaceDark,RoundedCornerShape(18.dp))) {
         val extent=max(3.0,markers.flatMap { listOf(it.position.x,it.position.y) }.maxOfOrNull { abs(it) }?.plus(1) ?: 3.0)
         val scale=(size.minDimension/2-16)/extent.toFloat()
         drawLine(TextSecondary.copy(alpha=.3f),Offset(center.x,0f),Offset(center.x,size.height))
@@ -98,8 +108,8 @@ private fun FleetMap(members: List<UnifiedDeviceState>,selfId: String?,fresh: (U
         }
     }
     // 地图下先紧凑汇总全部成员，观察员无需逐张翻详情卡也能对照三机位置和状态。
-    Column(Modifier.fillMaxWidth().background(SurfaceCard,RoundedCornerShape(12.dp))
-        .padding(10.dp).testTag("fleet-quick-overview"),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().background(SurfaceDark,RoundedCornerShape(18.dp))
+        .padding(12.dp).testTag("fleet-quick-overview"),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         members.forEach { m ->
             val live=fresh(m)
             val marker=markers.find {it.member.device_id==m.device_id}

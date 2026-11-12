@@ -20,6 +20,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.drawToBitmap
 import com.vrxfusion.remote.ui.*
+import com.vrxfusion.remote.ui.design.SafetyDock
 import com.vrxfusion.remote.ui.theme.VrxTheme
 import org.junit.Assert.*
 import org.junit.Rule
@@ -41,7 +42,7 @@ class SettingsLayoutTest {
         val tab=mutableIntStateOf(0); var protection=0
         rule.setContent { VrxTheme { FlightSettingsPanel(tab.intValue,{ tab.intValue=it },HudPreferences(),{},{},
             videoContent={ VideoSettingsPanel(com.vrxfusion.remote.video.VideoSettings(),"",com.vrxfusion.remote.video.VideoSource.NONE,"未启用测试画面",{},{},{},{}) },
-            safetyContent={ FlightSafetyButtons(true,{}, {protection++}) }) { Fields() } } }
+            safetyContent={ SafetyDock(true,true,{}, {protection++}) }) { Fields() } } }
         rule.onNodeWithText("保护").assertIsDisplayed().performClick()
         rule.runOnIdle { assertEquals(1,protection) }
         rule.onNodeWithText("画面测试").performScrollTo().performClick()
@@ -56,8 +57,8 @@ class SettingsLayoutTest {
         val bitmap=rule.runOnIdle { rule.activity.findViewById<View>(android.R.id.content).drawToBitmap(Bitmap.Config.ARGB_8888) }
         file.outputStream().buffered().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
     }
-    private fun previewPixels(): Bitmap {
-        val b=rule.onNodeWithTag("preview-map").fetchSemanticsNode().boundsInRoot
+    private fun previewPixels(tag: String="preview-map"): Bitmap {
+        val b=rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
         val root=rule.runOnIdle {rule.activity.findViewById<View>(android.R.id.content).drawToBitmap(Bitmap.Config.ARGB_8888)}
         return Bitmap.createBitmap(root,b.left.toInt(),b.top.toInt(),b.width.toInt(),b.height.toInt())
     }
@@ -91,9 +92,10 @@ class SettingsLayoutTest {
     @Test @Config(qualifiers="zh-rCN-w640dp-h320dp-land-xhdpi")
     fun presetsAndSlidersSaveWithoutChangingOtherFields() {
         val store=HudPreferencesStore(RuntimeEnvironment.getApplication())
-        val value=mutableStateOf(store.save(HudPreferences()))
+        val value=mutableStateOf(store.save(HudPreferences(showMap=false,showAttitude=false,instrumentScale=.9f,
+            level=HudDisplayLevel.L3,centerHudOpacity=.5f)))
         rule.setContent { VrxTheme { FlightSettingsPanel(1,{},value.value,{ value.value=store.save(it) },{},
-            safetyContent={FlightSafetyButtons(true,{},{})}) { Fields() } } }
+            safetyContent={SafetyDock(true,true,{},{})}) { Fields() } } }
         rule.runOnIdle {
             val nav=WindowInsetsCompat.Type.navigationBars()
             val status=WindowInsetsCompat.Type.statusBars()
@@ -103,8 +105,12 @@ class SettingsLayoutTest {
                 .setVisible(nav or status,false).build()
             ViewCompat.dispatchApplyWindowInsets(rule.activity.findViewById(android.R.id.content),insets)
         }
-        rule.onNodeWithText("沉浸").performClick()
-        rule.runOnIdle { assertEquals(HudPreset.IMMERSIVE.preferences,store.load()) }
+        rule.onNodeWithText("沉浸").performScrollTo().performClick()
+        rule.runOnIdle {
+            assertEquals(HudPreset.IMMERSIVE.preferences.copy(showMap=false,showAttitude=false,instrumentScale=.9f,
+                level=HudDisplayLevel.L3,centerHudOpacity=.5f),store.load())
+            value.value=store.save(value.value.copy(showMap=true,showAttitude=true,instrumentScale=1f))
+        }
         val preview=rule.onNodeWithTag("hud-preview").fetchSemanticsNode().boundsInRoot
         val oldMap=previewPixels()
         rule.onNodeWithContentDescription("地图不透明度").performScrollTo()
@@ -128,6 +134,42 @@ class SettingsLayoutTest {
         rule.runOnIdle {value.value=store.save(HudPreset.IMMERSIVE.preferences)}
         rule.onNodeWithText("恢复显示默认值").performScrollTo().performClick()
         rule.runOnIdle { assertEquals(HudPreferences(),store.load()) }
+    }
+    @Test @Config(qualifiers="zh-rCN-w640dp-h320dp-land-xhdpi")
+    fun centralHudSwitchUpdatesTheFixedPreviewAndSavesTheChoice() {
+        val app=RuntimeEnvironment.getApplication()
+        val store=HudPreferencesStore(app)
+        val settings=mutableStateOf(store.load())
+        rule.setContent { VrxTheme {
+            FlightSettingsPanel(1,{},settings.value,{ settings.value=store.save(it) },{},
+                safetyContent={ SafetyDock(true,true,{},{}) }) { Fields() }
+        } }
+        val toggle=rule.onNodeWithContentDescription("显示中央 HUD")
+        toggle.assertIsDisplayed().assertIsOff()
+        val preview=rule.onNodeWithTag("hud-preview").fetchSemanticsNode().boundsInRoot
+        rule.onNodeWithTag("preview-attitude").assertIsDisplayed()
+        toggle.performClick().assertIsOn()
+        rule.onNodeWithTag("central-hud-preview").assertIsDisplayed()
+        rule.onNodeWithTag("preview-attitude").assertDoesNotExist()
+        save("settings-manual-central-hud")
+        val centralBounds=rule.onNodeWithTag("central-hud").fetchSemanticsNode().boundsInRoot
+        val stickTop=rule.onNodeWithTag("preview-stick-left").fetchSemanticsNode().boundsInRoot.top
+        assertTrue("中央仪表下缘 ${centralBounds.bottom} 应在摇杆上缘 $stickTop 之上",centralBounds.bottom <= stickTop)
+        val before=previewPixels("central-hud-preview")
+        rule.onNodeWithContentDescription("中央 HUD 不透明度").performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(.4f) }
+        assertFalse(before.sameAs(previewPixels("central-hud-preview")))
+        assertEquals(preview,rule.onNodeWithTag("hud-preview").fetchSemanticsNode().boundsInRoot)
+        rule.onNodeWithText("沉浸").performScrollTo().performClick()
+        rule.runOnIdle {
+            val reloaded=HudPreferencesStore(app).load()
+            assertTrue(reloaded.showCentralHud)
+            assertEquals(.4f,reloaded.centerHudOpacity,.001f)
+        }
+        toggle.performScrollTo().performClick().assertIsOff()
+        rule.onNodeWithTag("central-hud-preview").assertDoesNotExist()
+        rule.onNodeWithTag("preview-attitude").assertIsDisplayed()
+        rule.runOnIdle { assertFalse(HudPreferencesStore(app).load().showCentralHud) }
     }
     @Test @Config(qualifiers="zh-rCN-w360dp-h780dp-port-xhdpi")
     fun portraitSettingsKeepsDoneVisibleAndCanReachAllControls() {

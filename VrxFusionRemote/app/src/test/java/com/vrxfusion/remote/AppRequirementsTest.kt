@@ -25,6 +25,10 @@ class AppRequirementsTest {
         val baseline=HudPreferences(showMap=false,swapInstruments=true,instrumentScale=.8f)
         assertEquals(baseline,HudConfigCodec.decode(HudConfigCodec.encode(baseline)))
         val valid=HudConfigCodec.encode(baseline)
+        val previous = HudConfigCodec.decode("""{"schemaVersion":1,"display":{"showMap":false,"mapOpacity":0.4}}""")
+        assertEquals(HudDisplayLevel.L2, previous.level)
+        assertFalse(previous.showMap)
+        assertEquals(.4f, previous.mapOpacity, 0f)
         listOf(valid.replace("\"schemaVersion\": 1","\"schemaVersion\": 2"),
             valid.replace("\"display\":", "\"disableProtection\": true, \"display\":"),
             valid.replace("0.65","0.01"),valid.replace("0.8","1.5"),"x".repeat(8193)).forEach {
@@ -45,11 +49,27 @@ class AppRequirementsTest {
         assertTrue(reloaded.load().showMap); assertFalse(reloaded.load().swapInstruments)
         assertEquals(3L,reloaded.revision())
     }
+    @Test fun automaticVideoConfigurationMigratesWithoutTurningOnManualCenterHud() {
+        val app=RuntimeEnvironment.getApplication()
+        val legacy="""{"schemaVersion":1,"display":{"showMap":false,"centerHudOnVideo":true,"centerHudOpacity":0.4}}"""
+        app.getSharedPreferences("flight_hud",Context.MODE_PRIVATE).edit().clear()
+            .putString("current_document",legacy).putString("checkpoint",legacy).commit()
+        val store=HudPreferencesStore(app)
+        val migrated=store.load()
+        assertFalse(migrated.showCentralHud)
+        assertFalse(migrated.showMap)
+        assertEquals(.4f,migrated.centerHudOpacity,0f)
+        store.save(migrated.copy(showCentralHud=true))
+        assertTrue(HudPreferencesStore(app).load().showCentralHud)
+        assertEquals(migrated,store.rollback())
+        assertFalse(HudConfigCodec.encode(store.load()).contains("centerHudOnVideo"))
+        assertTrue(runCatching { HudConfigCodec.decode(legacy.replace("false,", "false,\"disableProtection\":true,")) }.isFailure)
+    }
     @Test fun hideAndSwapInstrumentsPreservesSafetyAndFullScreenVideo() {
-        val hud=mutableStateOf(HudPreferences())
+        val hud=mutableStateOf(HudPreferences(level = HudDisplayLevel.L3))
         val s=RotorState(data_source="simulation_truth",selected_source="app")
         val notice=flightNotice(s,true,true,false,LinkPhase.READY,false,false,true,null)
-        rule.setContent { VrxTheme { FlightCockpit(s,emptyList(),notice,true,true,25.0,true,true,hud=hud.value) } }
+        rule.setContent { VrxTheme { FlightCockpit(s,emptyList(),cockpitTestControl(notice),true,true,25.0,hud=hud.value) } }
         val before=rule.onNodeWithTag("attitude-panel").fetchSemanticsNode().boundsInRoot.left
         rule.runOnIdle { hud.value=hud.value.copy(swapInstruments=true,instrumentScale=.8f) }
         assertTrue(rule.onNodeWithTag("attitude-panel").fetchSemanticsNode().boundsInRoot.left>before)
@@ -57,17 +77,25 @@ class AppRequirementsTest {
         rule.onNodeWithTag("position-panel").assertDoesNotExist()
         rule.onNodeWithTag("attitude-panel").assertDoesNotExist()
         rule.onNodeWithTag("position-readout").assertDoesNotExist()
+        rule.onNodeWithText("HDG 000°").assertIsDisplayed()
+        rule.onNodeWithTag("altitude-readout").assertIsDisplayed()
         rule.onNodeWithText("停止").assertIsDisplayed(); rule.onNodeWithText("保护").assertIsDisplayed()
         rule.onNodeWithTag("data-quality").assertIsDisplayed()
         assertEquals(rule.onNodeWithTag("cockpit").fetchSemanticsNode().boundsInRoot,
             rule.onNodeWithTag("ue-viewport").fetchSemanticsNode().boundsInRoot)
     }
     @Test fun stalePositionNumbersAreNotShownAsCurrent() {
-        val s=RotorState(position_m=listOf(7.12,8.34,9.56))
+        val s=RotorState(position_m=listOf(7.12,8.34,9.56),velocity_m_s=listOf(0.0,0.0,0.0))
         val notice=flightNotice(s,false,true,true,LinkPhase.DISCONNECTED,false,false,true,null)
-        rule.setContent { VrxTheme { FlightCockpit(s,emptyList(),notice,false,true,0.0,false,false) } }
-        rule.onNodeWithText("X —  Y —  Z — m").assertIsDisplayed()
-        rule.onNodeWithText("状态未更新 · 仪表仅供历史参考").assertIsDisplayed()
+        rule.setContent { VrxTheme { FlightCockpit(s,emptyList(),cockpitTestControl(notice,false,false),false,true,0.0,
+            hud=HudPreferences(level=HudDisplayLevel.L3)) } }
+        rule.onNodeWithTag("position-invalid-flag").assertIsDisplayed()
+        rule.onNodeWithTag("attitude-invalid-flag").assertIsDisplayed()
+        rule.onNodeWithTag("ground-speed-invalid-flag").assertIsDisplayed()
+        rule.onNodeWithTag("vertical-speed-invalid-flag").assertIsDisplayed()
+        rule.onNodeWithTag("map-invalid-flag", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithText("X 7.12  Y 8.34 m").assertDoesNotExist()
+        rule.onNodeWithText("状态未更新 · 数据质量未知").assertIsDisplayed()
         rule.onNodeWithText("停止").assertIsNotEnabled()
     }
     @Test fun readyCannotHideFailedActionAndAckDoesNotMeanCompleted() {

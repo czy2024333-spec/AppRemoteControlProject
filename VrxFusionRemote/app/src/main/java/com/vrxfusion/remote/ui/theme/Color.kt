@@ -2,20 +2,22 @@ package com.vrxfusion.remote.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 用邻近的深灰底色区分层级，操作和告警各用独立强调色。
-val BgDark = Color(0xFF14161A)
-val SurfaceDark = Color(0xFF1D2026)
-val SurfaceCard = Color(0xFF282C33)
-val AccentBlue = Color(0xFF90BAF2)
-val ControlFill = Color(0xFF2D3C50)
-val ControlText = Color(0xFFDCE9FA)
-val HudSurface = Color(0xE620252C)
-val RealRed = Color(0xFFE5534B)      // 真实设备标识（警示红）
-val VirtualGreen = Color(0xFF3FB950) // 虚拟设备标识（安全绿）
-val BoundPurple = Color(0xFFA371F7)  // 虚实绑定标识
-val WarnAmber = Color(0xFFE3B341)
-val TextPrimary = Color(0xFFF0F1F4)
-val TextSecondary = Color(0xFFB1B8C2)
-val OnlineDot = Color(0xFF3FB950)
-val OfflineDot = Color(0xFF6B7683)
-val EstopRed = Color(0xFFD93025)
+// 参照 iOS 深色外观：纯黑底、分组灰层、系统语义色。色名沿用，所有页面自动套用。
+val BgDark = Color(0xFF000000)        // systemBackground
+val SurfaceDark = Color(0xFF1C1C1E)   // secondarySystemBackground（分组卡片）
+val SurfaceCard = Color(0xFF2C2C2E)   // tertiarySystemBackground（抬高一层）
+val AccentBlue = Color(0xFF0A84FF)    // systemBlue
+val ControlFill = Color(0xFF0F2F54)   // 蓝色 tinted 按钮底
+val ControlText = Color(0xFF64A8FF)
+val HudSurface = Color(0xD91C1C1E)    // 叠在视频上的半透明材质
+val RealRed = Color(0xFFFF453A)       // systemRed
+val VirtualGreen = Color(0xFF30D158)  // systemGreen
+val BoundPurple = Color(0xFFBF5AF2)   // systemPurple
+val WarnAmber = Color(0xFFFF9F0A)     // systemOrange
+val TextPrimary = Color(0xFFFFFFFF)   // label
+val TextSecondary = Color(0xFFA1A1A8) // secondaryLabel
+val OnlineDot = Color(0xFF30D158)
+val OfflineDot = Color(0xFF636366)
+val EstopRed = Color(0xFFE5352C)      // 破坏性/紧急操作：停止
+val Separator = Color(0xFF38383A)     // separator
+val TertiaryFill = Color(0xFF3A3A3C)  // 列表行按下高亮

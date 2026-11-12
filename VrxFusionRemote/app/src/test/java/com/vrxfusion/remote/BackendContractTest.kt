@@ -152,6 +152,8 @@ class BackendContractTest {
                 waitFor { c.state.value?.sequence==31L }
                 assertEquals(LinkPhase.READY,c.phase.value)
                 waitFor { c.state.value?.sequence==32L }
+                // 遥测与控制权由两条状态流发布，等第 32 帧对应的撤销状态可见后再断言。
+                waitFor { c.phase.value != LinkPhase.READY }
                 assertNotEquals("新的来源变化必须撤销控制权",LinkPhase.READY,c.phase.value)
             } finally { c.disconnect(); scope.cancel() }
         }

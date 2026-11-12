@@ -3,16 +3,19 @@ package com.vrxfusion.remote.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vrxfusion.remote.MainViewModel
+import com.vrxfusion.remote.ui.design.GroupedCard
+import com.vrxfusion.remote.ui.design.NavBackButton
+import com.vrxfusion.remote.ui.design.StatusPill
 import com.vrxfusion.remote.unified.*
 import com.vrxfusion.remote.ui.theme.*
 
@@ -53,12 +56,16 @@ fun BackendManagementContent(
     }
     Column(Modifier.fillMaxSize().background(BgDark).safeDrawingPadding().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("连接与设备管理", color = TextPrimary, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onBack, modifier = Modifier.testTag("management-back")) { Text(returnLabel) }
+        // iOS 内联导航栏：返回在左、标题居中；返回文案仍随来源页变化。
+        Box(Modifier.fillMaxWidth().heightIn(min = 44.dp), contentAlignment = Alignment.Center) {
+            NavBackButton(returnLabel, onBack, Modifier.align(Alignment.CenterStart).testTag("management-back"))
+            Text("连接与设备管理", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
-        Text(status, color = if (connected && directory != null) VirtualGreen else WarnAmber,
-            fontSize = 13.sp, modifier = Modifier.testTag("management-status"))
+        val statusColor = if (connected && directory != null) VirtualGreen else WarnAmber
+        StatusPill(statusColor) {
+            Text(status, color = statusColor,
+                fontSize = 13.sp, modifier = Modifier.testTag("management-status"))
+        }
         Text("连接与操纵页共用；查看设备不等于接管。进入后台后需重新连接。",
             color = TextSecondary, fontSize = 11.sp)
         BoxWithConstraints(Modifier.weight(1f)) {
@@ -87,8 +94,7 @@ fun BackendManagementContent(
 
 @Composable
 private fun ManagementSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().background(SurfaceCard, RoundedCornerShape(16.dp)).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    GroupedCard(spacing = 8.dp) {
         Text(title, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         content()
     }
@@ -164,8 +170,7 @@ private fun ManagementDevice(d: UnifiedDevice, m: UnifiedDeviceState?, info: Uni
         !fresh -> "状态过期"
         else -> "在线 · 状态有效"
     }
-    Column(Modifier.fillMaxWidth().background(SurfaceCard, RoundedCornerShape(16.dp)).padding(14.dp)
-        .testTag("management-device-${d.device_id}"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    GroupedCard(Modifier.testTag("management-device-${d.device_id}"), spacing = 6.dp) {
         Text(d.device_id, color = if (own) WarnAmber else TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         if (d.name.isNotBlank() && d.name != d.device_id) Text(d.name, color = TextSecondary, fontSize = 12.sp)
         Text(status, color = if (!fresh || m?.mode == "PROTECTED") WarnAmber else VirtualGreen, fontSize = 12.sp)

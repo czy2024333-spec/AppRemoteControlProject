@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 import uuid
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from http_transport import JsonHandler, TransportError, validate_origins
@@ -59,6 +60,7 @@ class SimulationService:
         self.device_id = 'sim-drone-1'
         self.config = validate_config(config or DEFAULT)
         self.config_version = 1
+        self.control_config_origin = 'REGISTRY'
         self.config_path = config_path
         self.boot_id = uuid.uuid4().hex
         self.audit_path = Path(__file__).resolve().parent/'results/control_events.jsonl'
@@ -78,13 +80,18 @@ class SimulationService:
         self.owner = None
         self.owner_generation = 0
         self.control_epoch = uuid.uuid4().hex
+        self.last_applied = None
         self.motion = None
         self.deadline = None
         self.voice_end = None
         self.filtered_yaw = 0.
         self.transition = 'INITIAL_HOLD'
         self.failure = None
-        self.latest = None
+        self._published = None
+        self.state_changed = None
+        self.tick_intervals = deque(maxlen=512)
+        self.tick_overrun_count = 0
+        self.tick_diagnostics = dict(tick_jitter_p99_ms=None, tick_jitter_samples=0)
         self.publish()
 
     def authenticate(self, header):
@@ -102,12 +109,8 @@ class SimulationService:
         if self.thread.ident is not None:
             self.thread.join(3)
 
-    def publish(self):
-        raw = self.core.get_state()
-        if raw['sequence'] != getattr(self,'_health_sequence',None):
-            self._health_sequence=raw['sequence']
-            self._health_last_step=time.monotonic()
-        state = dict(api_version='0.5', implementation_version=IMPLEMENTATION_VERSION, boot_id=self.boot_id, data_source=raw['data_source'],
+    def build_state(self, raw):
+        return dict(api_version='0.5', implementation_version=IMPLEMENTATION_VERSION, boot_id=self.boot_id, data_source=raw['data_source'],
             boundary_recovery=raw['boundary_recovery'],
             server_time_ms=time.time()*1000, simulation_time_s=raw['time_s'], sequence=raw['sequence'],
             mode=raw['mode'], protection_reason=raw['protection_reason'],
@@ -122,14 +125,30 @@ class SimulationService:
             recent_events=self.events[-8:],
             recent_commands=[{k:v[k] for k in ('source','command_id','status','reason')} for v in list(self.records.values())[-8:]],
             control_epoch=self.control_epoch, arbitration_policy='USER_SWITCH_NEUTRAL',
+            last_applied=self.last_applied,
             owner_generation=self.owner_generation,
             last_sequences={k:v['sequence'] for k,v in self.sessions.items()},
             transition_reason=self.transition, filtered_yaw_rate_rad_s=self.filtered_yaw,
             sim_rate_hz=1/self.core.dt, state_stream_target_hz=25,
             voice_remaining_ms=max(0., (self.voice_end-time.monotonic())*1000) if self.voice_end else 0.)
-        # 一次提交整份状态，GET/SSE不会混合旧位置和新控制权。
-        with self.lock:
-            self.latest = state
+
+    def publish(self, raw=None):
+        if raw is None:
+            raw = self.core.get_state()
+        previous = self._published
+        stepped_at = time.monotonic() if previous is None or raw['sequence'] != previous[0]['sequence'] else previous[1]
+        # 发布后不再修改快照。状态与步进时间一同替换，读者复制时无需持有发布锁。
+        self._published = (self.build_state(raw), stepped_at)
+        if self.state_changed is not None:
+            self.state_changed.set()
+
+    def published_snapshot(self):
+        """内部只读引用，包含完整状态及对应的单调步进时刻。"""
+        return self._published
+
+    @property
+    def last_step_at(self):
+        return self._published[1]
 
     def refresh_record(self, key):
         # 命令历史只在变更时更新查询快照，避免每个100Hz动力学步复制全部历史。
@@ -148,23 +167,20 @@ class SimulationService:
             return copy.deepcopy(result)
 
     def state(self):
-        with self.lock:
-            if self.failure:
-                raise APIError(503, self.failure, 'SIMULATION_FAILURE')
-            return copy.deepcopy(self.latest)
+        if self.failure:
+            raise APIError(503, self.failure, 'SIMULATION_FAILURE')
+        return copy.deepcopy(self.published_snapshot()[0])
 
     def health(self):
-        with self.lock:
-            state = self.latest
-            alive = self.thread.is_alive()
-            failure = self.failure
-            # 健康新鲜度使用动力学步进的单调时间，不能被系统校时或频繁GET/心跳掩盖。
-            age = max(0.,(time.monotonic()-self._health_last_step)*1000)
-            healthy = alive and failure is None and age<500
-            return dict(healthy=healthy,implementation_version=IMPLEMENTATION_VERSION,
-                mode='single',device_id=self.device_id,boot_id=self.boot_id,
-                worker_alive=alive,state_age_ms=age,failure=failure,
-                protection_mode=state['mode'])
+        state, stepped_at = self.published_snapshot()
+        alive = self.thread.is_alive()
+        failure = self.failure
+        # 健康新鲜度使用动力学步进的单调时间，不能被校时或心跳刷新。
+        age = max(0.,(time.monotonic()-stepped_at)*1000)
+        return dict(healthy=alive and failure is None and age<500,implementation_version=IMPLEMENTATION_VERSION,
+            mode='single',device_id=self.device_id,boot_id=self.boot_id,
+            worker_alive=alive,state_age_ms=age,failure=failure, protection_mode=state['mode'],
+            sim_rate_hz=state['sim_rate_hz'],tick_overrun_count=self.tick_overrun_count,**self.tick_diagnostics)
 
     def submit(self, path, body, source):
         item = dict(path=path, body=body, source=source, received=time.monotonic(),
@@ -211,6 +227,7 @@ class SimulationService:
         self.finish_command(self.active_command, 'CANCELLED', reason)
         self.active_command = None
         self.control_epoch = uuid.uuid4().hex
+        self.last_applied = None
         self.transition = reason
         if release:
             if self.owner in self.sessions:
@@ -364,7 +381,9 @@ class SimulationService:
             key = (session['id'], command_id)
             content = {k:v for k,v in body.items() if k not in ('sent_at_ms','ttl_ms')}
             try:
-                fingerprint = hashlib.sha256(json.dumps(content,sort_keys=True,allow_nan=False).encode()).hexdigest()
+                # 停止和保护的请求体可以相同，幂等校验必须同时比较动作路径。
+                action = dict(path=path, body=content)
+                fingerprint = hashlib.sha256(json.dumps(action,sort_keys=True,allow_nan=False).encode()).hexdigest()
             except ValueError:
                 raise APIError(400,'命令包含非有限数值','INVALID_ARGUMENT')
             if key in self.records:
@@ -523,6 +542,8 @@ class SimulationService:
                 except OSError:
                     raise APIError(503,'配置保存失败，原配置仍有效','CONFIG_SAVE_FAILED')
             self.config = candidate
+            if self.config_path is not None:
+                self.control_config_origin = 'FILE'
             self.config_version += 1
             self.clear_selection('CONFIG_UPDATED')
             self.new_epoch('CONFIG_UPDATED')
@@ -569,6 +590,9 @@ class SimulationService:
             # 完成参数/能力/来源/模式检查后，才向动力学发送；非法输入不能改变控制权。
             self.accept_owner(source)
             self.core.set_motion(*motion[:3],self.filtered_yaw,.5)
+            # 心跳和等待确认不推进运动回执。语音确认关联原始语音报文的序号。
+            self.last_applied = dict(control_epoch=self.control_epoch, source=source.upper(),
+                intent_sequence=intent, command_sequence=body['command_sequence'])
             if self.active_command is not None:
                 self.finish_command(self.active_command,'CANCELLED','REPLACED_BY_NEW_INPUT')
             self.active_command = key if path=='/api/voice' else None
@@ -657,14 +681,22 @@ class SimulationService:
             self.filtered_yaw += max(-delta, min(delta,difference))
             self.core.set_motion(*self.motion[:3], self.filtered_yaw, .5)
         previous = self.core.get_state()['mode']
-        self.core.step()
-        if previous != 'PROTECTED' and self.core.get_state()['mode'] == 'PROTECTED':
-            self.clear_selection(self.core.get_state()['protection_reason'])
-            self.new_epoch(self.core.get_state()['protection_reason'])
-        self.publish()
+        raw = self.core.step()
+        if previous != 'PROTECTED' and raw['mode'] == 'PROTECTED':
+            self.clear_selection(raw['protection_reason'])
+            self.new_epoch(raw['protection_reason'])
+        self.publish(raw)
+
+    def _wait_for_next_tick(self, next_tick):
+        # Windows 上 Event.wait 的短超时会被系统计时粒度拉长。每次短睡后重新检查指令和停止信号。
+        delay = min(.002, next_tick - time.monotonic())
+        if delay > 0.:
+            time.sleep(delay)
 
     def run(self):
         next_tick, last = time.monotonic(), time.monotonic()
+        last_tick = None
+        last_diagnostics = last
         try:
             while not self.stopping.is_set():
                 now = time.monotonic()
@@ -714,9 +746,19 @@ class SimulationService:
                         item['done'].set()
                 now = time.monotonic()
                 if now >= next_tick:
+                    if now-next_tick >= self.core.dt:
+                        self.tick_overrun_count += 1
+                    if last_tick is not None:
+                        self.tick_intervals.append(abs(now-last_tick-self.core.dt)*1000)
+                    last_tick = now
+                    if self.tick_intervals and now-last_diagnostics >= 1.:
+                        samples = sorted(self.tick_intervals)
+                        self.tick_diagnostics = dict(tick_jitter_p99_ms=samples[math.ceil(.99*len(samples))-1],
+                            tick_jitter_samples=len(samples))
+                        last_diagnostics = now
                     self.tick()
                     next_tick += self.core.dt
-                self.stopping.wait(max(0.,min(.002,next_tick-time.monotonic())))
+                self._wait_for_next_tick(next_tick)
         except Exception as exc:
             with self.lock:
                 self.failure = '仿真线程异常：'+str(exc)

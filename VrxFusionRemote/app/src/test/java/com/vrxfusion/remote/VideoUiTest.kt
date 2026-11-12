@@ -38,8 +38,8 @@ class VideoUiTest {
             val viewportMessage=mutableStateOf<String?>("正在开启电脑摄像头…")
             val notice=flightNotice(null,false,false,false,LinkPhase.DISCONNECTED,false,false,true,null)
             rule.setContent { VrxTheme {
-                FlightCockpit(null,emptyList(),notice,false,true,0.0,false,false,
-                    viewportStatus=viewportMessage.value,ueContent={
+                FlightCockpit(null,emptyList(),cockpitTestControl(notice,false,false),false,true,0.0,
+                    hud=HudPreferences(showCentralHud=true),viewportStatus=viewportMessage.value,ueContent={
                         TestVideoViewport(source.value,VideoSettings(VideoSource.PC,server.url("/video").toString()),
                             "camera-code-2026-abc") { text,failed ->
                             status.value=text
@@ -59,6 +59,7 @@ class VideoUiTest {
                 assertTrue(status.value,status.value.contains("超过3秒未更新"))
                 rule.onNode(hasTestTag("video-viewport-status") and hasText("电脑画面超过3秒未更新，请检查视频源后重新启用"))
                     .assertIsDisplayed()
+                rule.onNodeWithTag("central-hud").assertIsDisplayed()
             } finally { rule.runOnIdle { source.value=VideoSource.NONE }; rule.waitForIdle() }
         }
     }
@@ -116,11 +117,13 @@ class VideoUiTest {
                 .setBody(buffer).throttleBody(part.size.toLong(),100,TimeUnit.MILLISECONDS))
             val source=mutableStateOf(VideoSource.PC); val status=mutableStateOf("")
             var stopClicks=0
-            val state=RotorState(selected_source="app")
+            val hud=mutableStateOf(HudPreferences())
+            val state=RotorState(selected_source="app", velocity_m_s=listOf(.8,.4,.24))
             val notice=flightNotice(state,true,true,false,LinkPhase.READY,false,false,true,null)
-            rule.setContent { VrxTheme { FlightCockpit(state,emptyList(),notice,true,true,25.0,true,true,
+            rule.setContent { VrxTheme { FlightCockpit(state,emptyList(),cockpitTestControl(notice),true,true,25.0,
                 onStop={ stopClicks++ },
-                videoLabel="电脑摄像头（测试图）",ueContent={ TestVideoViewport(source.value,
+                videoLabel="电脑摄像头（测试图）",hud=hud.value,
+                ueContent={ TestVideoViewport(source.value,
                     VideoSettings(VideoSource.PC,server.url("/video").toString()),"camera-code-2026-abc") { text,_ ->
                     status.value=text
                 } }) } }
@@ -132,13 +135,20 @@ class VideoUiTest {
                 rule.waitForIdle()
                 val root=rule.onNodeWithTag("cockpit").fetchSemanticsNode().boundsInRoot
                 assertEquals(root,rule.onNodeWithTag("ue-viewport").fetchSemanticsNode().boundsInRoot)
-                rule.onNodeWithTag("position-panel").assertIsDisplayed()
+                rule.onNodeWithTag("central-hud").assertDoesNotExist()
                 rule.onNodeWithTag("attitude-panel").assertIsDisplayed()
-                val pixel=bitmap().getPixel(root.center.x.toInt(),root.center.y.toInt())
+                rule.runOnIdle { hud.value=hud.value.copy(showCentralHud=true) }
+                rule.onNodeWithTag("position-panel").assertIsDisplayed()
+                rule.onNodeWithTag("central-hud").assertIsDisplayed()
+                rule.onNodeWithTag("attitude-panel").assertDoesNotExist()
+                val pixel=bitmap().getPixel((root.right-62).toInt(),root.center.y.toInt())
                 assertTrue("底层必须实际绘出JPEG，而非只显示已连接文字",android.graphics.Color.green(pixel)>100)
-                save("video-pc-hud")
+                save("video-pc-manual-hud")
                 rule.onNodeWithText("停止").performClick()
                 rule.runOnIdle { assertEquals("实际视频不能挡住HUD按钮点击",1,stopClicks) }
+                rule.runOnIdle { hud.value=hud.value.copy(showCentralHud=false) }
+                rule.onNodeWithTag("central-hud").assertDoesNotExist()
+                rule.onNodeWithTag("attitude-panel").assertIsDisplayed()
             } finally { rule.runOnIdle { source.value=VideoSource.NONE }; rule.waitForIdle() }
         }
     }

@@ -4,6 +4,11 @@ import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
 
 /** 格式版本仅属于显示配置，禁止导入权限、Token或保护开关。 */
 @Serializable
@@ -14,10 +19,19 @@ object HudConfigCodec {
     fun encode(value: HudPreferences)=json.encodeToString(HudDocument(display=value))
     fun decode(text: String): HudPreferences {
         require(text.length<=8192) { "配置文件超过8KB" }
-        val doc=json.decodeFromString<HudDocument>(text)
+        val root = json.parseToJsonElement(text).jsonObject
+        val display = root["display"]
+        val document = if (display is JsonObject && "centerHudOnVideo" in display) {
+            // 旧版默认为随视频显示。迁移时保留其他设置，等待用户主动开启中央 HUD。
+            val legacy = display["centerHudOnVideo"] as? JsonPrimitive
+            require(legacy != null && !legacy.isString && legacy.booleanOrNull != null) { "旧版中央 HUD 设置必须为布尔值" }
+            JsonObject(root + ("display" to JsonObject(display - "centerHudOnVideo")))
+        } else root
+        val doc=json.decodeFromJsonElement<HudDocument>(document)
         require(doc.schemaVersion==1) { "不支持的显示配置格式版本" }
         val v=doc.display
-        require(listOf(v.joystickOpacity,v.attitudeOpacity,v.mapOpacity,v.positionOpacity).all { it.isFinite() && it in .2f..1f }) { "不透明度必须在0.2～1之间" }
+        require(listOf(v.joystickOpacity,v.attitudeOpacity,v.mapOpacity,v.positionOpacity,v.centerHudOpacity)
+            .all { it.isFinite() && it in .2f..1f }) { "不透明度必须在0.2～1之间" }
         require(v.instrumentScale.isFinite() && v.instrumentScale in .8f..1f) { "仪表尺寸必须在0.8～1之间" }
         return v
     }

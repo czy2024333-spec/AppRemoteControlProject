@@ -36,6 +36,7 @@ python run_backend.py --mode independent --host 0.0.0.0 --port 8765
 
 ## 对接文档
 
+- [当前后端架构逻辑与复测](后端架构逻辑说明.md) · [HUD 优化实施记录](后端HUD优化实施记录.md)
 - [当前三机接口](前端对接_三机独立操控.md) · [OpenAPI](openapi_independent.json)
 - [完整运行、Token 与测试说明](README_v0.9.md)
 - [原交付验证报告](验证报告_v0.9.md) · [协作仓库验证摘要](../docs/validation/README.md)

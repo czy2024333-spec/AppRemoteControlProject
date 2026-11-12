@@ -73,12 +73,22 @@ private fun PhoneVideoPreview(front: Boolean,onStreaming: ()->Unit,onError: (Str
             override fun onDisplayRemoved(id: Int) {}
             override fun onDisplayChanged(id: Int) { preview.targetRotation=view.display?.rotation ?: Surface.ROTATION_0 }
         }
-        var hasStreamed=false
+        var playingReported=false
+        fun interrupted(message: String) {
+            if (!disposed && playingReported) {
+                playingReported = false
+                failed(message)
+            }
+        }
         val streamObserver=Observer<PreviewView.StreamState> {
-            if (!disposed && it==PreviewView.StreamState.STREAMING) { hasStreamed=true; ready() }
-            else if (!disposed && hasStreamed) failed("手机画面已中断，请重新启用摄像头")
+            if (!disposed && it==PreviewView.StreamState.STREAMING) { playingReported=true; ready() }
+            else interrupted("手机画面已中断，请重新启用摄像头")
+        }
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) interrupted("手机画面已暂停")
         }
         view.previewStreamState.observe(owner,streamObserver)
+        owner.lifecycle.addObserver(lifecycleObserver)
         manager.registerDisplayListener(rotation,Handler(Looper.getMainLooper()))
         if (ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED) {
             failed("手机相机未授权，请在画面测试中重新启用并允许相机权限")
@@ -100,6 +110,7 @@ private fun PhoneVideoPreview(front: Boolean,onStreaming: ()->Unit,onError: (Str
             disposed=true
             manager.unregisterDisplayListener(rotation)
             view.previewStreamState.removeObserver(streamObserver)
+            owner.lifecycle.removeObserver(lifecycleObserver)
             camera?.cameraInfo?.cameraState?.removeObserver(cameraObserver)
             // 仅解绑本组件的预览，退出页面、切换画面源都释放本次相机占用。
             provider?.unbind(preview)
@@ -130,8 +141,9 @@ private fun PcVideoPreview(url: String,code: String,onStreaming: ()->Unit,onErro
             }
         }
         handler.postDelayed(watchdog,250)
-        val observer=LifecycleEventObserver { _,event -> if (event==Lifecycle.Event.ON_STOP) {
-            disposed.set(true); stream.close(); latest.set(null); view.setImageDrawable(null)
+        val observer=LifecycleEventObserver { _,event -> if (event==Lifecycle.Event.ON_STOP && disposed.compareAndSet(false,true)) {
+            stream.close(); latest.set(null); view.setImageDrawable(null)
+            failed("电脑画面已暂停，请重新启用")
         } }
         owner.lifecycle.addObserver(observer)
         try { stream.start({ bytes ->

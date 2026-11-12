@@ -12,6 +12,26 @@
     }
   ],
   "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "检查仿真成员、审计及共享状态发布",
+        "security": [{"sourceToken": []}],
+        "responses": {
+          "200": {
+            "description": "健康",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          },
+          "401": {
+            "description": "凭据无效",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
+          },
+          "503": {
+            "description": "服务退化，响应仍包含各组件的检查结果",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          }
+        }
+      }
+    },
     "/api/v1/capabilities": {
       "get": {
         "summary": "能力及认证方式发现",
@@ -321,7 +341,7 @@
               "text/event-stream": {
                 "schema": {
                   "type": "string",
-                  "description": "event: state；data为FleetState对象；不包ok/data外壳"
+                  "description": "state 事件带 id、发送时间和 replayed。发布健康且无新帧时发送注释心跳。发布线程异常退出或卡住时关闭连接。"
                 }
               }
             }
@@ -377,7 +397,7 @@
             }
           },
           "503": {
-            "description": "拒绝或不可用，保留原始错误码",
+            "description": "共享状态发布不可用（STATE_PUBLISHER_UNAVAILABLE），快照接口仍可独立读取",
             "content": {
               "application/json": {
                 "schema": {
@@ -386,7 +406,27 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "同一状态流最近50帧内恢复。失效时发送重同步注释和最新帧。"
+          },
+          {
+            "name": "focus",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "可选全量目标机。部分帧仅更新目标机，僚机约10 Hz。省略时返回完整全机列表。"
+          }
+        ]
       }
     },
     "/api/v1/devices/{device_id}/state": {
@@ -512,7 +552,7 @@
               "text/event-stream": {
                 "schema": {
                   "type": "string",
-                  "description": "event: state；data为DeviceState对象；不包ok/data外壳"
+                  "description": "state 事件带 id、发送时间和 replayed。发布健康且无新帧时发送注释心跳。发布线程异常退出或卡住时关闭连接。"
                 }
               }
             }
@@ -568,7 +608,7 @@
             }
           },
           "503": {
-            "description": "拒绝或不可用，保留原始错误码",
+            "description": "共享状态发布不可用（STATE_PUBLISHER_UNAVAILABLE），快照接口仍可独立读取",
             "content": {
               "application/json": {
                 "schema": {
@@ -586,6 +626,15 @@
               "type": "string"
             },
             "in": "path"
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "同一状态流最近50帧内恢复。失效时发送重同步注释和最新帧。"
           }
         ]
       }
@@ -3578,6 +3627,14 @@
                 "enum": [
                   "m"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -3617,6 +3674,14 @@
                 "enum": [
                   "m/s"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -3649,6 +3714,14 @@
                   "INVALID",
                   "NOT_CONNECTED"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -3688,6 +3761,14 @@
                 "enum": [
                   "rad/s"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -3765,7 +3846,26 @@
             }
           },
           "sensors": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "local_position_velocity": {
+                "type": "object",
+                "properties": {
+                  "age_ms": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stale_after_ms": {
+                    "type": "integer",
+                    "nullable": true
+                  }
+                }
+              }
+            }
           },
           "task": {
             "type": "object"
@@ -3810,11 +3910,76 @@
               },
               "lease_required": {
                 "type": "boolean"
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "awaiting_neutral": {
+                "type": "boolean"
+              },
+              "last_applied": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "intent_sequence": {
+                    "type": "integer"
+                  },
+                  "command_sequence": {
+                    "type": "integer"
+                  }
+                }
               }
             }
           },
           "is_self": {
             "type": "boolean"
+          },
+          "protection": {
+            "type": "object",
+            "properties": {
+              "latched": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "recovery": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "blockers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ALTITUDE",
+                        "RADIUS",
+                        "SPEED"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "protection_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "target_yaw_rad": {
+            "type": "number",
+            "nullable": true
+          },
+          "environment": {
+            "type": "object",
+            "nullable": true
           }
         }
       },
@@ -3975,7 +4140,15 @@
             "type": "object"
           },
           "capabilities": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {"type": "boolean"},
+            "properties": {
+              "hud_state_metadata": {"type": "boolean", "description": "HUD 状态有效期、原因、保护恢复与最近应用运动元数据"},
+              "sse_comment_heartbeat": {"type": "boolean", "description": "发布健康且空闲时发送 SSE 注释心跳"},
+              "sse_resume": {"type": "boolean", "description": "支持 Last-Event-ID 有界续传"},
+              "sse_focus": {"type": "boolean", "description": "支持显式 focus 分流"},
+              "state_publisher_health": {"type": "boolean", "description": "健康接口提供 state_publisher，SSE 发布故障时关闭订阅"}
+            }
           },
           "control_policy": {
             "type": "object"
@@ -4001,6 +4174,33 @@
           },
           "target_revision": {
             "type": "integer"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["ok", "data", "request_id"],
+        "properties": {
+          "ok": {"type": "boolean"},
+          "request_id": {"type": "string"},
+          "data": {
+            "type": "object",
+            "required": ["healthy", "boot_id", "state_publisher"],
+            "properties": {
+              "healthy": {"type": "boolean"},
+              "boot_id": {"type": "string", "description": "独立多机服务的启动编号"},
+              "state_publisher": {
+                "type": "object",
+                "required": ["healthy", "thread_alive", "reason", "progress_age_ms", "progress_timeout_ms"],
+                "properties": {
+                  "healthy": {"type": "boolean"},
+                  "thread_alive": {"type": "boolean"},
+                  "reason": {"type": "string", "nullable": true, "description": "STATE_PUBLISHER_FAILED、STATE_PUBLISHER_STALLED 或 STATE_PUBLISHER_STOPPED"},
+                  "progress_age_ms": {"type": "number"},
+                  "progress_timeout_ms": {"type": "number"}
+                }
+              }
+            }
           }
         }
       },

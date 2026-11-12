@@ -1,6 +1,10 @@
 """独立多机 HTTP/SSE：一个地址，按设备隔离写入，向所有授权端发布全机状态。"""
 import argparse
+from collections import deque
+from dataclasses import dataclass
 import json
+import logging
+import math
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 import socket
@@ -15,9 +19,120 @@ from runtime_info import identifier
 from unified_contract import error_detail, receipt
 
 
+@dataclass(frozen=True)
+class StreamFrame:
+    number: int
+    captured_at: float
+    state: dict
+    raw_members: dict
+
+
+class StateFeed:
+    """每台服务共享一份有界状态历史。客户端写入在各自 HTTP 线程完成。"""
+
+    max_progress_gap_s = 1.
+
+    def __init__(self, fleet, stopping):
+        self.fleet = fleet
+        self.stopping = stopping
+        self.changed = threading.Condition()
+        self.history = deque(maxlen=50)
+        self.last_progress_at = time.monotonic()
+        self.failure = None
+        self.thread = threading.Thread(target=self.run, name='independent-state-feed', daemon=True)
+        self.thread.start()
+
+    def run(self):
+        next_capture = 0.
+        previous = None
+        try:
+            while not self.stopping.is_set():
+                # 发布唤醒触发取样。无发布时也检查超时，保证冻结能切换到 LOST。
+                self.fleet.state_changed.wait(.1)
+                self.fleet.state_changed.clear()
+                if self.stopping.wait(max(0., next_capture-time.monotonic())):
+                    return
+                now = time.monotonic()
+                # 沿计划时刻推进，避免把 Windows 线程唤醒延迟累计到每一帧。
+                next_capture += .04
+                if next_capture <= now:
+                    next_capture = now + .04
+                states = [self.fleet.member_state(name, copy_state=False) for name in sorted(self.fleet.members)]
+                signature = tuple((s['boot_id'],s['sequence'],s['server_time_ms'],s['online'],
+                    s['mode'],s['control_epoch'],s['selected_source'],s['pending_source'],s['last_applied']) for s in states)
+                signature = (signature, self.fleet.audit.failure)
+                data = self.fleet.fleet_snapshot(states) if signature != previous else None
+                with self.changed:
+                    # 记录采样循环完成的时间。静态数据属于正常空闲，卡在取样或聚合则不会刷新。
+                    self.last_progress_at = time.monotonic()
+                    if data is not None:
+                        number = self.history[-1].number+1 if self.history else 1
+                        self.history.append(StreamFrame(number, now, data, {s['device_id']:s for s in states}))
+                        self.changed.notify_all()
+                previous = signature
+        except Exception:
+            with self.changed:
+                self.failure = 'STATE_PUBLISHER_FAILED'
+                self.changed.notify_all()
+            logging.exception('共享状态发布线程异常退出')
+
+    def _problem(self, now):
+        if self.failure:
+            return self.failure
+        if self.stopping.is_set() or not self.thread.is_alive():
+            return 'STATE_PUBLISHER_STOPPED'
+        if now - self.last_progress_at >= self.max_progress_gap_s:
+            return 'STATE_PUBLISHER_STALLED'
+        return None
+
+    def status(self):
+        with self.changed:
+            now = time.monotonic()
+            problem = self._problem(now)
+            return dict(healthy=problem is None, thread_alive=self.thread.is_alive(), reason=problem,
+                progress_age_ms=(now-self.last_progress_at)*1000, progress_timeout_ms=self.max_progress_gap_s*1000)
+
+    def frames_after(self, cursor, replay):
+        with self.changed:
+            self.changed.wait_for(lambda: self._problem(time.monotonic()) or
+                bool(self.history and self.history[-1].number != cursor), timeout=self.max_progress_gap_s)
+            if self._problem(time.monotonic()):
+                # 结束已有连接，让客户端走断线处理，避免继续发送心跳掩盖故障。
+                return None, False
+            if not self.history or self.history[-1].number == cursor:
+                return (), False
+            latest = self.history[-1]
+            if not replay:
+                return (latest,), False
+            if cursor is None or cursor < self.history[0].number-1 or cursor > latest.number:
+                return (latest,), True
+            return tuple(frame for frame in self.history if frame.number>cursor), False
+
+    def close(self):
+        self.stopping.set()
+        self.fleet.state_changed.set()
+        with self.changed:
+            self.changed.notify_all()
+        self.thread.join(1.)
+
+
+def peer_summary(member):
+    result = {key:member[key] for key in ('device_id','boot_id','sequence','simulation_time_s',
+        'state_age_ms','online','mode','position')}
+    attitude = member['attitude']
+    yaw = None
+    if attitude['value'] is not None:
+        q = attitude['value']
+        yaw = math.atan2(2*(q['w']*q['z']+q['x']*q['y']), 1-2*(q['y']**2+q['z']**2))
+    result['yaw'] = dict(value=yaw, unit='rad', source=attitude['source'],
+        validity=attitude['validity'], age_ms=attitude['age_ms'], reason=attitude['reason'])
+    return result
+
+
 def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=()):
     class Handler(JsonHandler):
         protocol_version = 'HTTP/1.1'
+        allowed_request_headers = (*JsonHandler.allowed_request_headers, 'Last-Event-ID')
 
         def setup(self):
             super().setup()
@@ -27,35 +142,69 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
         def log_message(self, *args):
             pass
 
-        def stream(self, identity, name=None, legacy=False):
+        def stream(self, identity, name=None, legacy=False, focus=None):
             if name is not None:
-                fleet.member_state(name)
+                fleet.member_state(name, copy_state=False)
+            if focus is not None:
+                fleet.member_state(focus, copy_state=False)
+            feed = self.server.state_feed
+            if not feed.status()['healthy']:
+                raise APIError(503,'共享状态发布不可用，可通过状态快照检查','STATE_PUBLISHER_UNAVAILABLE')
+            prefix = f"{fleet.boot_id}/{name or 'fleet'}/{focus or '-'}/{int(legacy)}:"
+            last_id = self.headers.get('Last-Event-ID')
+            replay = bool(last_id)
+            cursor = None
+            if last_id and last_id.startswith(prefix):
+                number = last_id[len(prefix):]
+                if number.isascii() and number.isdigit() and len(number)<=18:
+                    cursor = int(number)
+            next_peers = None
+            subscribed_at = time.monotonic()
             self.send_response(200)
             self.send_header('Content-Type','text/event-stream; charset=utf-8')
             self.send_header('Cache-Control','no-store')
             self.send_header('Connection','close')
             self.end_headers()
             self.close_connection = True
-            previous = None
-            next_send = time.monotonic()
             try:
                 while not self.server.fleet_stopping.is_set():
-                    if name is None:
-                        data = fleet.state(identity)
-                        signature = tuple((m['device_id'],m['boot_id'],m['sequence'],m['online'],m['mode']) for m in data['members'])
-                    else:
-                        data = fleet.member_state(name) if legacy else fleet.view(identity,name)
-                        signature = (data['boot_id'],data['sequence'],data['online'],data['mode'])
-                    if signature != previous:
-                        self.wfile.write(('event: state\ndata: '+json.dumps(data,ensure_ascii=False,allow_nan=False)+'\n\n').encode('utf-8'))
+                    frames, resync = feed.frames_after(cursor, replay)
+                    if frames is None:
+                        break
+                    if not frames:
+                        # 发布线程健康时才发送注释帧，旧 APP 不会将注释解码成状态。
+                        self.wfile.write(b': heartbeat\n\n')
                         self.wfile.flush()
-                        previous = signature
-                    # 同一条全机 SSE 即可画出自己和其他两架；慢观察端不会占用仿真线程。
-                    next_send += .04
-                    now = time.monotonic()
-                    if next_send < now:
-                        next_send = now
-                    self.server.fleet_stopping.wait(max(0.,next_send-now))
+                        continue
+                    if resync:
+                        self.wfile.write(b': resync\n\n')
+                    for frame in frames:
+                        if name is None:
+                            data = fleet.state_for_identity(frame.state, identity)
+                            if focus is not None:
+                                include_peers = next_peers is None or frame.captured_at >= next_peers
+                                if include_peers:
+                                    next_peers = (frame.captured_at if next_peers is None else
+                                        next_peers+math.floor((frame.captured_at-next_peers)/.1)*.1)+.1
+                                data['members'] = [member if member['device_id']==focus else peer_summary(member)
+                                    for member in data['members'] if member['device_id']==focus or include_peers]
+                                data.update(partial=True, focus_device_id=focus, peers_included=include_peers)
+                        elif legacy:
+                            data = dict(frame.raw_members[name])
+                        else:
+                            member = next(item for item in frame.state['members'] if item['device_id']==name)
+                            is_self = name == identity['device_id']
+                            data = dict(member,is_self=is_self,control=dict(member['control'],
+                                write_permitted=identity['role']=='CONTROLLER' and is_self))
+                        data.update(sent_at_unix_ms=time.time()*1000,
+                            replayed=replay and not resync and frame.captured_at <= subscribed_at)
+                        payload = json.dumps(data,ensure_ascii=False,allow_nan=False)
+                        # 兼容按顺序读取 event 和 data 的旧工具，id 在事件结束前附加。
+                        message = f'event: state\ndata: {payload}\nid: {prefix}{frame.number}\n\n'
+                        self.wfile.write(message.encode('utf-8'))
+                        self.wfile.flush()
+                        cursor = frame.number
+                    replay = False
             except (OSError,APIError):
                 pass
 
@@ -100,6 +249,8 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                         raise APIError(403,'此凭据仅可观察','READ_ONLY')
                 if not post and path == '/api/health':
                     data = fleet.health()
+                    data['state_publisher'] = self.server.state_feed.status()
+                    data['healthy'] = data['healthy'] and data['state_publisher']['healthy']
                     return self.reply(200 if data['healthy'] else 503,dict(ok=data['healthy'],data=data))
                 if not post and path == '/api/v1/capabilities':
                     data = fleet.info(identity)
@@ -108,7 +259,11 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 elif not post and path == '/api/v1/state':
                     data = fleet.state(identity)
                 elif not post and path == '/api/v1/events':
-                    return self.stream(identity)
+                    query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                    focus = query.get('focus')
+                    if focus is not None and len(focus)!=1:
+                        raise APIError(400,'focus 只能指定一个设备','INVALID_ARGUMENT')
+                    return self.stream(identity,focus=identifier(focus[0]) if focus else None)
                 elif not post and path == '/api/v1/logs':
                     query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
                     data = fleet.logs(identity,query)
@@ -174,12 +329,13 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
         request_queue_size = 64
 
         def server_close(self):
-            self.fleet_stopping.set()
+            self.state_feed.close()
             super().server_close()
 
     Handler.allowed_origins = validate_origins(allowed_origins)
     server = Server((host,port),Handler)
     server.fleet_stopping = threading.Event()
+    server.state_feed = StateFeed(fleet, server.fleet_stopping)
     return server
 
 

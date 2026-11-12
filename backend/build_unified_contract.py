@@ -16,6 +16,23 @@ def write(path,value):
     path.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+'\n',encoding='utf-8')
 
 
+def add_hud_state_fields(state):
+    fields = state['properties']
+    freshness = dict(age_ms=dict(type='number',nullable=True),reason=dict(type='string',nullable=True))
+    for name in ('position','velocity','attitude','angular_velocity'):
+        fields[name]['properties'].update(freshness)
+    fields['sensors'].setdefault('properties',{})['local_position_velocity'] = dict(
+        type='object',properties=dict(**freshness,stale_after_ms=dict(type='integer',nullable=True)))
+    fields['control']['properties'].update(active=dict(type='boolean'),awaiting_neutral=dict(type='boolean'),
+        last_applied=dict(type='object',nullable=True,properties=dict(control_epoch=dict(type='string'),
+            source=dict(type='string'),intent_sequence=dict(type='integer'),command_sequence=dict(type='integer'))))
+    fields.update(protection=dict(type='object',properties=dict(latched=dict(type='boolean'),
+        reason=dict(type='string',nullable=True), recovery=dict(type='object',nullable=True,
+            properties=dict(blockers=dict(type='array',items=dict(type='string',enum=['ALTITUDE','RADIUS','SPEED'])))))),
+        protection_reason=dict(type='string',nullable=True),target_yaw_rad=dict(type='number',nullable=True),
+        environment=dict(type='object',nullable=True))
+
+
 def openapi():
     ref=lambda name: {'$ref':'#/components/schemas/'+name}
     number={'type':'number'}; text={'type':'string'}
@@ -38,6 +55,7 @@ def openapi():
         sensors={'type':'object'},task={'type':'object'},video={'type':'object'},alarms=dict(type='array',items={'type':'object'}),
         control=dict(type='object',properties=dict(source=nullable_text,selected_source=nullable_text,pending_source=nullable_text,
             phase=text,control_epoch=text,has_control=dict(type='boolean',nullable=True,description='观察请求无法确认租约，当前为null'),lease_required={'type':'boolean'}))))
+    add_hud_state_fields(state)
     schemas=dict(Vector3=vec,Quaternion=quat,DeviceState=state,
         FleetState=dict(type='object',required=['contract_version','cluster_id','boot_id','target_revision','members','selection'],
             properties=dict(contract_version=text,cluster_id=text,boot_id=text,target_revision={'type':'integer'},

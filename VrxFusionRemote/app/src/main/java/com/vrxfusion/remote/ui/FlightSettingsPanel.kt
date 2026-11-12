@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,6 +68,10 @@ fun FlightSettingsPanel(selectedTab: Int,onTabChange: (Int)->Unit,hud: HudPrefer
                         }.testTag("settings-card"),
                         shape=RoundedCornerShape(22.dp),color=SurfaceDark,shadowElevation=4.dp) {
                         Column {
+                            // iOS 底部弹出面板顶部的拖动条（竖屏）；横屏为整幅面板，不显示。
+                            if (!wide) Box(Modifier.fillMaxWidth().padding(top=8.dp),contentAlignment=Alignment.Center) {
+                                Box(Modifier.size(36.dp,5.dp).clip(RoundedCornerShape(3.dp)).background(TextSecondary.copy(alpha=.4f)))
+                            }
                             Row(Modifier.fillMaxWidth().heightIn(min=64.dp)
                                 .padding(horizontal=16.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically,
                                 horizontalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -75,8 +80,9 @@ fun FlightSettingsPanel(selectedTab: Int,onTabChange: (Int)->Unit,hud: HudPrefer
                                     Text("飞行设置",fontSize=19.sp,lineHeight=24.sp,fontWeight=FontWeight.Bold,color=TextPrimary)
                                     Text("操控暂时停用",fontSize=12.sp,lineHeight=16.sp,color=TextSecondary)
                                 }
-                                FilledTonalButton(onClick={ dismiss() },contentPadding=PaddingValues(horizontal=16.dp),
-                                    modifier=Modifier.height(44.dp).testTag("settings-done")) { Text("完成") }
+                                // iOS 导航栏右上角「完成」：蓝色半粗体文字按钮。
+                                TextButton(onClick={ dismiss() },contentPadding=PaddingValues(horizontal=16.dp),
+                                    modifier=Modifier.height(44.dp).testTag("settings-done")) { Text("完成",fontWeight=FontWeight.SemiBold) }
                             }
                             if (!wide) Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=6.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                 SettingsCategory("显示布局",selectedTab==1,{ select(1) },1,Modifier.weight(1f))
@@ -117,7 +123,7 @@ fun FlightSettingsPanel(selectedTab: Int,onTabChange: (Int)->Unit,hud: HudPrefer
                 // 安全操作固定在同一位置，只随蒙层淡入淡出，整个过渡期间可立即响应。
                 safetyContent?.let { safety ->
                     Surface(Modifier.fillMaxWidth().testTag("settings-safety-dock").graphicsLayer { alpha=progress },
-                        shape=RoundedCornerShape(16.dp),color=SurfaceDark) { safety() }
+                        shape=RoundedCornerShape(20.dp),color=SurfaceDark) { safety() }
                 }
             }
         }

@@ -87,7 +87,7 @@ data class StickSnapshot(val rx: Float = 0f, val ry: Float = 0f, val lx: Float =
 }
 
 /** 单机直联：SSE 只读；用户主动申请时才建会话、切换、真实归中。所有POST串行，运动不重试。 */
-class RotorPyClient(var baseUrl: String = "http://192.168.1.100:8765", var token: String = "demo-app-token-2026") {
+class RotorPyClient(var baseUrl: String = "http://10.0.2.2:8765", var token: String = "demo-app-token-2026") {
     @Volatile var expectedDeviceId: String?=null
     @Volatile var unifiedReceiptQueries=false
     private data class DeviceRoute(val deviceId: String,val clusterId: String)
@@ -574,7 +574,20 @@ class RotorPyClient(var baseUrl: String = "http://192.168.1.100:8765", var token
                     ?.let { readyAfterSequence=it }
                 if (path=="/api/stop" && pendingStopVersion==version) pendingStopVersion=null
             }
-            if (path != "/api/heartbeat") lastAckMs.value=(monoMs()-start).toDouble()
+            if (path != "/api/heartbeat") {
+                val elapsed = (monoMs() - start).toDouble()
+                lastAckMs.value = elapsed
+                if (path == "/api/input") {
+                    performance.record(elapsed, true)
+
+                    // ====== 换成 Android 标准的日志打印 ======
+                    val stats = performance.snapshot()
+                    android.util.Log.i("P95_TEST", "========================================")
+                    android.util.Log.i("P95_TEST", "【P95 性能统计】总尝试: ${stats.attempts}, 成功: ${stats.successes}, 失败: ${stats.failures}")
+                    android.util.Log.i("P95_TEST", "P95 耗时: ${stats.p95Ms} ms, 最大耗时: ${stats.maxMs} ms")
+                    android.util.Log.i("P95_TEST", "========================================")
+                }
+            }
             // HTTP成功只表示接收；完成状态必须来自服务端明确的command_status。
             if (commandId!=null) {
                 val local=CommandFeedback(commandId,actionName,
@@ -585,7 +598,14 @@ class RotorPyClient(var baseUrl: String = "http://192.168.1.100:8765", var token
                 commandFeedback.value=if (receipt!=null) local.withReceipt(receipt) else local
             }
         } catch (e: Exception) {
-            if (path=="/api/input") performance.record((System.nanoTime()-generatedAt)/1_000_000.0,false)
+            if (path=="/api/input") {
+                performance.record(ms = (System.nanoTime()-generatedAt)/1_000_000.0, success = false)
+                val stats = performance.snapshot()
+                android.util.Log.i("P95_TEST", "============ P95 性能统计 ============")
+                android.util.Log.i("P95_TEST", "总尝试: ${stats.attempts}, 成功: ${stats.successes}, 失败: ${stats.failures}")
+                android.util.Log.i("P95_TEST", "P95 耗时: ${stats.p95Ms ?: 0.0} ms")
+                android.util.Log.i("P95_TEST", "=======================================")
+            }
             if (version!=operationVersion.get()) throw e
             if (path=="/api/input" && !requestAllowed()) audit("MOTION_CANCELLED","RELEASE_OR_CONTROL_LOSS")
             else audit("COMMAND_FAILURE","$path|${e.javaClass.simpleName}|${(e as? HttpRejection)?.errorCode ?: "NO_SERVER_CODE"}")
@@ -605,13 +625,21 @@ class RotorPyClient(var baseUrl: String = "http://192.168.1.100:8765", var token
 fun CommandFeedback.withReceipt(r: UnifiedReceipt)=copy(status=r.phase,reason=r.reason.orEmpty(),
     completionScope=r.completion_scope,deviceId=r.device_id ?: deviceId,rawCode=r.raw_code,succeeded=r.succeeded,failed=r.failed)
 fun monoMs()=System.nanoTime()/1_000_000
-fun connectionIssue(url: String,token: String): String? {
-    val u=runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return "后端地址格式不正确"
+fun connectionIssue(url: String, token: String): String? {
+    val u = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return "后端地址格式不正确"
+
+    // 注意：这里给 if 加上了大括号 {}
     if (u.scheme !in setOf("http","https") || u.host.isNullOrBlank() || !u.rawUserInfo.isNullOrEmpty() ||
         !u.rawQuery.isNullOrEmpty() || !u.rawFragment.isNullOrEmpty() || u.path !in listOf("","/") ||
-        (u.port != -1 && u.port !in 1..65535)) return "地址应为 http://电脑IPv4:8765，不要填写接口路径"
-        if (token.trim().isEmpty() || token.trim().any { it.isWhitespace() || it.code !in 33..126 })
+        (u.port != -1 && u.port !in 1..65535)) {
+        return "地址应为 http://电脑IPv4:8765，不要填写接口路径"
+    }
+
+    // 注意：这里也给 if 加上了大括号 {}，并且修正了 return 的缩进
+    if (token.trim().isEmpty() || token.trim().any { it.isWhitespace() || it.code !in 33..126 }) {
         return "请填写来源 Token，不要加 Bearer 前缀"
+    }
+
     return null
 }
 fun explainConnection(e: Exception): String=when {

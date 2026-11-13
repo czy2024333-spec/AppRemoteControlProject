@@ -51,7 +51,12 @@ android {
     buildFeatures {
         compose = true
     }
-    testOptions { unitTests.isIncludeAndroidResources = true }
+    // isReturnDefaultValues: 单测中 android.util.Log 等未 mock 的 android API 返回默认值而非抛异常。
+    // P95 指令耗时统计在 /api/input 路径调用 android.util.Log.i，若不放开会在 JVM 单测中把成功指令误判为失败。
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.isReturnDefaultValues = true
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

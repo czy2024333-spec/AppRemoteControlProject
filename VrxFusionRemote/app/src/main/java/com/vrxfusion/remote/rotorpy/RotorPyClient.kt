@@ -90,6 +90,7 @@ data class StickSnapshot(val rx: Float = 0f, val ry: Float = 0f, val lx: Float =
 class RotorPyClient(var baseUrl: String = "http://10.0.2.2:8765", var token: String = "demo-app-token-2026") {
     @Volatile var expectedDeviceId: String?=null
     @Volatile var unifiedReceiptQueries=false
+    private var lastP95LogTime = 0L
     private data class DeviceRoute(val deviceId: String,val clusterId: String)
     @Volatile private var deviceRoute: DeviceRoute?=null
     /** 只在旧会话已释放后绑定；飞机编号不能随摇杆输入或地图选择而改变。 */
@@ -129,7 +130,8 @@ class RotorPyClient(var baseUrl: String = "http://10.0.2.2:8765", var token: Str
     val busy = MutableStateFlow(false)
     val commandFeedback = MutableStateFlow<CommandFeedback?>(null)
     val running = MutableStateFlow(false)
-    val performance=PerformanceStats()
+    val performance = PerformanceStats.instance
+    fun getP95Snapshot() = performance.snapshot()
     val receivedRate=StateRate()
     val renderedRate=StateRate()
     val safetyBusy=MutableStateFlow(false)
@@ -577,15 +579,17 @@ class RotorPyClient(var baseUrl: String = "http://10.0.2.2:8765", var token: Str
             if (path != "/api/heartbeat") {
                 val elapsed = (monoMs() - start).toDouble()
                 lastAckMs.value = elapsed
+
                 if (path == "/api/input") {
                     performance.record(elapsed, true)
-
-                    // ====== 换成 Android 标准的日志打印 ======
-                    val stats = performance.snapshot()
-                    android.util.Log.i("P95_TEST", "========================================")
-                    android.util.Log.i("P95_TEST", "【P95 性能统计】总尝试: ${stats.attempts}, 成功: ${stats.successes}, 失败: ${stats.failures}")
-                    android.util.Log.i("P95_TEST", "P95 耗时: ${stats.p95Ms} ms, 最大耗时: ${stats.maxMs} ms")
-                    android.util.Log.i("P95_TEST", "========================================")
+                    if (System.currentTimeMillis() - lastP95LogTime > 5000) {
+                        val stats = performance.snapshot()
+                        android.util.Log.i("P95_TEST", "============ P95 性能统计 ============")
+                        android.util.Log.i("P95_TEST", "总尝试: ${stats.attempts}, 成功: ${stats.successes}, 失败: ${stats.failures}")
+                        android.util.Log.i("P95_TEST", "P95 耗时: ${stats.p95Ms ?: 0.0} ms")
+                        android.util.Log.i("P95_TEST", "=======================================")
+                        lastP95LogTime = System.currentTimeMillis()
+                    }
                 }
             }
             // HTTP成功只表示接收；完成状态必须来自服务端明确的command_status。
@@ -600,11 +604,14 @@ class RotorPyClient(var baseUrl: String = "http://10.0.2.2:8765", var token: Str
         } catch (e: Exception) {
             if (path=="/api/input") {
                 performance.record(ms = (System.nanoTime()-generatedAt)/1_000_000.0, success = false)
-                val stats = performance.snapshot()
-                android.util.Log.i("P95_TEST", "============ P95 性能统计 ============")
-                android.util.Log.i("P95_TEST", "总尝试: ${stats.attempts}, 成功: ${stats.successes}, 失败: ${stats.failures}")
-                android.util.Log.i("P95_TEST", "P95 耗时: ${stats.p95Ms ?: 0.0} ms")
-                android.util.Log.i("P95_TEST", "=======================================")
+                if (System.currentTimeMillis() - lastP95LogTime > 5000) {
+                    val stats = performance.snapshot()
+                    android.util.Log.i("P95_TEST", "============ P95 性能统计 ============")
+                    android.util.Log.i("P95_TEST", "总尝试: ${stats.attempts}, 成功: ${stats.successes}, 失败: ${stats.failures}")
+                    android.util.Log.i("P95_TEST", "P95 耗时: ${stats.p95Ms ?: 0.0} ms")
+                    android.util.Log.i("P95_TEST", "=======================================")
+                    lastP95LogTime = System.currentTimeMillis()
+                }
             }
             if (version!=operationVersion.get()) throw e
             if (path=="/api/input" && !requestAllowed()) audit("MOTION_CANCELLED","RELEASE_OR_CONTROL_LOSS")
@@ -645,7 +652,7 @@ fun connectionIssue(url: String, token: String): String? {
 fun explainConnection(e: Exception): String=when {
     e is HttpRejection && e.code == 401 -> "Token无效（401），请填写APP来源Token"
     e is HttpRejection && e.code == 404 -> "接口不匹配（404）：操纵页需要 --mode single；三机请用集群监控"
-    else -> "连接中断：${e.message ?: "请检查电脑IP、局域网及端口"}"
+    else -> "连接中断：${e.message ?: "请检查电脑IP、局域网及端口"}。\n注意：默认10.0.2.2仅供模拟器，真机请填电脑实际IPv4，或用adb reverse。"
 }
 /** HTTP共用层：不重试控制请求，不跟随重定向，Token不写入URL和日志。 */
 class BackendWire {

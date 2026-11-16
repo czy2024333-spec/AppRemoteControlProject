@@ -24,6 +24,9 @@ class PerformanceStats {
         }
         return AckStats(attempts,successes,failures,p95,maxMs)
     }
+    companion object {
+        val instance = PerformanceStats()
+    }
 }
 data class AckStats(val attempts: Long,val successes: Long,val failures: Long,val p95Ms: Double?,val maxMs: Double)
 

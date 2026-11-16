@@ -20,6 +20,15 @@ import kotlinx.coroutines.withContext
 fun DiagnosticsPanel(vm: MainViewModel) {
     val diagnostics=vm.diagnostics
     val state by diagnostics.view.collectAsState()
+    var realP95Text by remember { mutableStateOf("正在统计...") }
+    LaunchedEffect(Unit) {
+        while(true) {
+            val stats = com.vrxfusion.remote.rotorpy.PerformanceStats.instance.snapshot()
+            val p95 = stats.p95Ms?.let { "%.0f ms".format(it) } ?: "—"
+            realP95Text = "接收P95 $p95 · 成功 ${stats.successes} · 失败 ${stats.failures}"
+            kotlinx.coroutines.delay(2000)
+        }
+    }
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     var conditions by remember { mutableStateOf(diagnostics.conditions) }
@@ -35,7 +44,7 @@ fun DiagnosticsPanel(vm: MainViewModel) {
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
         HorizontalDivider()
         Text("性能与持续运行记录",color=TextPrimary,fontSize=16.sp)
-        Text("接收P95 ${state.p95Ms?.let { "≤%.0f ms".format(it) } ?: "—"} · 成功 ${state.samples} · 失败 ${state.failed}",color=TextPrimary,fontSize=12.sp)
+        Text(realP95Text, color=TextPrimary, fontSize=12.sp)
         Text("状态接收 %.1f Hz · APP状态提交 %.1f Hz".format(state.receiveHz,state.renderHz),color=TextPrimary,fontSize=12.sp)
         Text("累计 ${state.elapsedS/60} 分钟 · 前台 ${state.foregroundS/60} 分钟 · 后台次数 ${state.interruptions}",color=TextSecondary,fontSize=11.sp)
         Text("主线程队列最大延迟 ${state.maxMainDelayMs} ms · 丢失记录 ${state.lostRecords}",color=TextSecondary,fontSize=11.sp)

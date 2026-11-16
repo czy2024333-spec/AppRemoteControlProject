@@ -581,7 +581,7 @@ class RotorPyClient(var baseUrl: String = "http://10.0.2.2:8765", var token: Str
                 lastAckMs.value = elapsed
 
                 if (path == "/api/input") {
-                    performance.record(elapsed, true)
+                    // 成功样本已在上方按“指令生成→服务确认”记录一次，此处只做降频输出，避免重复计数。
                     if (System.currentTimeMillis() - lastP95LogTime > 5000) {
                         val stats = performance.snapshot()
                         android.util.Log.i("P95_TEST", "============ P95 性能统计 ============")

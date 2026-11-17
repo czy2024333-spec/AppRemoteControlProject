@@ -1146,6 +1146,11 @@
               "awaiting_neutral": {
                 "type": "boolean"
               },
+              "epoch_reason": {
+                "type": "string",
+                "nullable": true,
+                "description": "推进该控制轮次的原因"
+              },
               "last_applied": {
                 "type": "object",
                 "nullable": true,

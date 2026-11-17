@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import time
 import unittest
+from unittest.mock import patch
 import test_ctl
 from sdk_bridge import SDKBridge
 
@@ -110,6 +111,50 @@ class InputTests(unittest.TestCase):
         self.select('voice')
         self.assertEqual(self.speech(text='前进')['command_status'],'WAITING_CONFIRMATION')
         self.assertIsNone(app.request('/api/state')['active_source'])
+
+    def test_voice_safety_actions_at_history_limit_keep_validation_and_receipts(self):
+        self.select('voice')
+        voice = self.clients['voice']
+        with patch('app_server.COMMAND_HISTORY_LIMIT',3):  # 归中已经占用一条普通记录。
+            ignored = self.speech(text='天气很好')
+            self.assertEqual(ignored['command_status'],'IGNORED')
+            self.assertEqual(self.speech(text='前进',duration_ms=1000)['mode'],'ACTIVE')
+            self.rejected('COMMAND_HISTORY_FULL',lambda:self.speech(text='下降'))
+            # 低置信度保护仍只是一条识别失败结果，不能获得安全动作的待遇。
+            self.rejected('COMMAND_HISTORY_FULL',lambda:self.speech(text='紧急停止',confidence=.1))
+            state = self.speech(text='悬停')
+            self.assertEqual(state['mode'],'HOLD')
+            protected = self.speech(text='紧急停止')
+            self.assertEqual(protected['protection_reason'],'EMERGENCY_VOICE')
+        for result, action in ((state,'hover'),(protected,'protect')):
+            receipt = voice.request('/api/commands/voice/'+result['command_id'])
+            self.assertEqual((receipt['status'],receipt['semantic_action']),('COMPLETED',action))
+
+    def test_ring_safety_actions_at_history_limit_keep_sdk_sequence_checks(self):
+        app, ring = self.clients['app'],self.clients['ring']
+        app.switch('ring')
+        with patch('app_server.COMMAND_HISTORY_LIMIT',1):
+            ring.discrete('/api/ring-event',event_sequence=0,event_kind='axes',phase='neutral',axes=[0.,0.,0.,0.],
+                control_epoch=app.epoch)
+            ring.begin_intent()
+            self.assertEqual(ring.control(vx=.1)['mode'],'ACTIVE')
+            self.rejected('STALE_DEVICE_EVENT',lambda:ring.discrete('/api/ring-event',event_sequence=0,
+                event_kind='button',button='stop',pressed=True))
+            self.assertEqual(ring.request('/api/state')['mode'],'ACTIVE')
+            stopped = ring.discrete('/api/ring-event',event_sequence=1,event_kind='axes',phase='end')
+            self.assertEqual(stopped['mode'],'HOLD')
+            protected = ring.discrete('/api/ring-event',event_sequence=2,event_kind='button',button='emergency',pressed=True)
+            self.assertEqual(protected['protection_reason'],'EMERGENCY_RING')
+            disconnected = ring.discrete('/api/ring-event',event_sequence=3,event_kind='connection',connected=False)
+            self.assertEqual(disconnected['command_status'],'COMPLETED')
+        for result in (stopped,protected,disconnected):
+            receipt = ring.request('/api/commands/ring/'+result['command_id'])
+            self.assertEqual(receipt['status'],'COMPLETED')
+
+    def test_oversized_voice_confidence_is_rejected_without_worker_failure(self):
+        self.rejected('INVALID_ARGUMENT',lambda:self.speech(text='紧急停止',confidence=10**400))
+        self.assertTrue(self.service.thread.is_alive())
+        self.assertEqual(self.speech(text='紧急停止')['protection_reason'],'EMERGENCY_VOICE')
 
 
 if __name__=='__main__':

@@ -148,7 +148,8 @@ def make_unified_server(manager,host='127.0.0.1',port=8765,allowed_origins=(),pr
             except (APIError,TransportError) as exc:
                 if post: self.close_connection=True
                 self.reply(exc.status,dict(ok=False,error=exc.message,error_code=exc.code,
-                    error_detail=error_detail(exc.code,exc.message,name,body.get('command_id') if body else None)))
+                    error_detail=error_detail(exc.code,exc.message,name,body.get('command_id') if body else None,
+                        timing=getattr(exc,'timing',None))))
             except (ValueError,TypeError,KeyError) as exc:
                 self.close_connection=True
                 self.reply(400,dict(ok=False,error=str(exc),error_code='INVALID_ARGUMENT',

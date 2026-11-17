@@ -2,6 +2,7 @@
 import concurrent.futures
 from contextlib import contextmanager
 import copy
+import csv
 import http.client
 import json
 from pathlib import Path
@@ -15,7 +16,8 @@ from async_audit import AsyncAudit
 from client import ClientError
 from independent_client import IndependentClient
 from independent_fleet import IndependentFleet, validate_credentials
-from independent_server import make_independent_server
+from independent_server import StateFeed, make_independent_server
+from runtime_info import COMMAND_HISTORY_LIMIT, COMMAND_QUEUE_LIMIT, SAFETY_COMMAND_HISTORY_LIMIT, STATE_STREAM_TARGET_HZ
 
 
 def temporary_directory():
@@ -25,6 +27,15 @@ def temporary_directory():
     folder = tempfile.TemporaryDirectory(dir=base)
     assert Path(folder.name).resolve().is_relative_to(base.resolve())
     return folder
+
+
+class StateFeedTimingTests(unittest.TestCase):
+    def test_capture_phase_uses_the_gap_between_scheduled_steps(self):
+        # 状态预计在每周期的 2、7、12 ms 就绪，跨步最大的空档中心是 17 ms。
+        origins = (20.,20.005,20.010)
+        self.assertAlmostEqual(StateFeed._aligned_capture_time(20.04,20.,origins,.02),20.037)
+        # 启动时超过的空档必须顺延，避免刚起步就取上一个周期的相位。
+        self.assertAlmostEqual(StateFeed._aligned_capture_time(20.,20.,origins,.02),20.017)
 
 
 class CredentialsTests(unittest.TestCase):
@@ -159,6 +170,14 @@ class IndependentTests(unittest.TestCase):
             fresh = self.read_event(response)
             self.assertFalse(fresh['data']['replayed'])
             self.assertEqual(len(fresh['data']['members']),3)
+        status, payload = self.request('/api/health')
+        self.assertEqual(status,200)
+        cadence = payload['data']['state_publisher']['cadence']
+        self.assertEqual(cadence['target_hz'],STATE_STREAM_TARGET_HZ)
+        self.assertIn(cadence['samples'],range(1,self.server.state_feed.history.maxlen))
+        self.assertGreater(cadence['capture_gap_p95_ms'],0)
+        self.assertGreaterEqual(cadence['capture_gap_max_ms'],cadence['capture_gap_p95_ms'])
+        self.assertGreaterEqual(cadence['latest_frame_age_ms'],0)
 
     def test_stream_resume_header_is_allowed_for_an_approved_origin(self):
         connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=3)
@@ -256,6 +275,13 @@ class IndependentTests(unittest.TestCase):
         for key in ('hud_state_metadata','sse_comment_heartbeat','sse_resume','sse_focus','state_publisher_health'):
             self.assertIs(data['capabilities'][key],True)
         self.assertTrue(all(type(value) is bool for value in data['capabilities'].values()))
+        policy = data['link_policy']
+        self.assertEqual(policy['state_stream_target_hz'],data['control_policy']['state_stream_target_hz'])
+        self.assertEqual(policy['member_state_stale_after_ms'],self.config['limits']['lost_timeout_s']*1000)
+        self.assertEqual(policy['sse_replay_frames'],self.server.state_feed.history.maxlen)
+        self.assertEqual(policy['state_publisher_timeout_ms'],self.server.state_feed.status()['progress_timeout_ms'])
+        self.assertGreater(policy['recommended_sse_read_timeout_ms'],policy['sse_idle_heartbeat_ms'])
+        self.assertGreater(policy['recommended_sse_first_frame_timeout_ms'],policy['sse_idle_heartbeat_ms'])
 
     def test_boundary_recovery_matches_legacy_and_unified_for_same_snapshot(self):
         service = self.fleet.members['sim-drone-1']
@@ -354,6 +380,87 @@ class IndependentTests(unittest.TestCase):
             app.neutral([.2,0,0,0])
         self.assertEqual(raised.exception.payload['error_code'],'NOT_NEUTRAL')
         app.neutral(); app.begin_intent(); app.control(vx=.1)
+
+    def test_optional_session_clock_check_rejects_before_replacing_session(self):
+        app = self.clients[0]
+        self.activate(app)
+        active = app.control(vx=.1)
+        path = '/api/v1/devices/sim-drone-1/session'
+        body = dict(device_id=app.device_id,cluster_id=app.cluster_id,user_initiated=True)
+        for offset, reason in ((10000,'CLIENT_TIME_AHEAD'),(-10000,'EXPIRED_AT_RECEIPT')):
+            with self.subTest(reason=reason):
+                code, payload = self.request(path,dict(body,client_sent_at_ms=time.time()*1000+offset),index=0)
+                self.assertEqual((code,payload['error_code']),(409,'CLOCK_SYNC_REQUIRED'))
+                detail = payload['error_detail']
+                self.assertEqual(detail['code'],'CLOCK_SYNC_REQUIRED')
+                self.assertEqual(detail['retry_policy'],'USER_ACTION_REQUIRED')
+                self.assertEqual(detail['timing']['reason'],reason)
+                self.assertEqual(detail['timing']['ttl_ms'],active['control_config']['input_ttl_ms'])
+                self.assertGreater(detail['timing']['server_received_at_ms'],0)
+        self.assertEqual(app.control(vx=.1)['control_epoch'],active['control_epoch'])
+        code, payload = self.request(path,dict(body,client_sent_at_ms=time.time()*1000),index=0)
+        self.assertEqual(code,200)
+        data = payload['data']
+        self.assertNotEqual(data['session_id'],app.session_id)
+        self.assertEqual(data['control_epoch_reason'],'SESSION_REPLACED')
+        self.assertLessEqual(data['ack']['server_received_at_ms'],data['ack']['confirmed_at_ms'])
+
+    def test_command_timing_reports_skew_expiry_on_arrival_and_queue_expiry(self):
+        app = self.clients[0]
+        app.open_session()
+        path = '/api/v1/devices/sim-drone-1/heartbeat'
+        for offset, status, raw_code, reason in ((10000,400,'CLOCK_SKEW','CLIENT_TIME_AHEAD'),
+            (-10000,409,'EXPIRED_COMMAND','EXPIRED_AT_RECEIPT')):
+            with self.subTest(reason=reason):
+                body = dict(app.envelope(),sent_at_ms=time.time()*1000+offset)
+                code, payload = self.request(path,body,index=0)
+                self.assertEqual((code,payload['error_code']),(status,raw_code))
+                timing = payload['error_detail']['timing']
+                self.assertEqual(timing['reason'],reason)
+                self.assertEqual(timing['ttl_ms'],body['ttl_ms'])
+
+        service = self.fleet.members[app.device_id]
+        envelope = service.envelope
+
+        def delayed(item, require_epoch=True):
+            # 只模拟服务器队列滞留，接收时的报文年龄保持正常。
+            return envelope(dict(item,received=item['received']-1),require_epoch=require_epoch)
+
+        with patch.object(service,'envelope',delayed):
+            code, payload = self.request(path,app.envelope(),index=0)
+        self.assertEqual((code,payload['error_code']),(409,'EXPIRED_COMMAND'))
+        timing = payload['error_detail']['timing']
+        self.assertEqual(timing['reason'],'EXPIRED_WHILE_QUEUED')
+        self.assertLess(timing['observed_age_ms'],timing['ttl_ms'])
+        self.assertGreaterEqual(timing['queue_age_ms'],1000)
+
+    def test_out_of_range_integer_timestamp_does_not_stop_member(self):
+        app = self.clients[0]
+        app.open_session()
+        path = '/api/v1/devices/sim-drone-1/heartbeat'
+        code, payload = self.request(path,dict(app.envelope(),sent_at_ms=10**400),index=0)
+        self.assertEqual((code,payload['error_code']),(400,'INVALID_ARGUMENT'))
+        self.assertEqual(self.request(path,app.envelope(),index=0)[0],200)
+        self.assertTrue(self.fleet.members[app.device_id].thread.is_alive())
+
+    def test_epoch_reason_stays_stable_through_neutral_and_motion(self):
+        app = self.clients[0]
+        app.open_session()
+        switched = app.switch('app')
+        app.neutral(); app.begin_intent()
+        active = app.control(vx=.1)
+        self.assertEqual(active['transition_reason'],'INPUT_app')
+        self.assertEqual(active['control_epoch'],switched['control_epoch'])
+        self.assertEqual(active['control_epoch_reason'],'USER_SWITCH_TO_app')
+        with self.open_stream('/api/v1/devices/sim-drone-1/events') as response:
+            # SSE 按独立节拍取样。连接首帧可能早于刚完成的 HTTP 回执。
+            for _ in range(5):
+                state = self.read_event(response)['data']
+                if state['mode']=='ACTIVE':
+                    break
+        self.assertEqual(state['mode'],'ACTIVE')
+        self.assertEqual(state['control']['control_epoch'],active['control_epoch'])
+        self.assertEqual(state['control']['epoch_reason'],active['control_epoch_reason'])
 
     def test_three_concurrent_pilots_move_independently_and_observer_sees_all(self):
         for app in self.clients:
@@ -503,6 +610,38 @@ class IndependentTests(unittest.TestCase):
         self.assertEqual(self.request('/api/v1/state')[1]['data']['link']['audit'],'UNAVAILABLE')
         app.stop()
 
+    def test_audit_failure_before_execution_preserves_mapped_safety_actions(self):
+        self.stop_instance()
+        voice_row = dict(client_id='test-voice',token='test-voice-token-for-audit',role='CONTROLLER',
+            device_id='sim-drone-1',source='voice')
+        self.credentials['credentials'].append(voice_row)
+        self.start_instance()
+        voice = IndependentClient(voice_row['device_id'],voice_row['token'],self.url,source='voice')
+        self.addCleanup(voice.close)
+        voice.open_session()
+        app = self.clients[0]
+        self.activate(app)
+        app.control(vx=.1)
+        old_session = app.session_id
+        service = self.fleet.members[app.device_id]
+        execute = service.execute
+
+        def fail_after_admission(item):
+            self.fleet.audit._fail('TEST_AUDIT_FAILED_AFTER_ADMISSION')
+            return execute(item)
+
+        with patch.object(service,'execute',fail_after_admission):
+            with self.assertRaises(ClientError) as error:
+                app.open_session()
+        self.assertEqual(error.exception.payload['error_code'],'AUDIT_UNAVAILABLE')
+        self.assertEqual(service.sessions['app']['id'],old_session)
+        protected = voice.discrete('/api/voice-result',command_code='protect',recognized=True,confidence=.95)
+        self.assertEqual(protected['mode'],'PROTECTED')
+        self.assertEqual(protected['protection_reason'],'AUDIT_UNAVAILABLE')
+        self.assertEqual(protected['control_epoch_reason'],'EMERGENCY_VOICE')
+        receipt = voice.request('/api/commands/voice/'+protected['command_id'])
+        self.assertEqual(receipt['status'],'COMPLETED')
+
     def test_audit_write_failure_requires_restart_and_fresh_control_session(self):
         app = self.clients[0]
         self.activate(app)
@@ -543,6 +682,7 @@ class IndependentTests(unittest.TestCase):
 
     def test_expired_and_old_epoch_are_rejected_and_stop_is_idempotent(self):
         app = self.clients[0]; self.activate(app)
+        app.control(vx=.1)
         old = app.envelope(); old.update(intent_sequence=0,frame='world',axes=[.1,0,0,0])
         stop = app.envelope(); stop.update(command_id='stop-once')
         path = '/api/v1/devices/sim-drone-1/stop'
@@ -552,6 +692,16 @@ class IndependentTests(unittest.TestCase):
         self.assertNotEqual(epoch,stop['control_epoch'])
         self.assertEqual(first['data']['mode'],'HOLD')
         self.assertIsNone(first['data']['last_applied'])
+        # 即使未收到 STOP 应答，也能从只读状态确认新轮次，旧触摸意图不能借新轮次恢复。
+        latest = self.request('/api/v1/devices/sim-drone-1/state')[1]['data']
+        self.assertEqual((latest['control']['control_epoch'],latest['control']['epoch_reason']),(epoch,'STOP_APP'))
+        self.assertEqual(latest['mode'],'HOLD')
+        stale = dict(app.envelope(),intent_sequence=app.intent,frame='world',axes=[.1,0,0,0])
+        code, payload = self.request('/api/v1/devices/sim-drone-1/input',stale,index=0)
+        self.assertEqual((code,payload['error_code']),(409,'STALE_EPOCH'))
+        retired = dict(app.envelope(),control_epoch=epoch,intent_sequence=app.intent,frame='world',axes=[.1,0,0,0])
+        code, payload = self.request('/api/v1/devices/sim-drone-1/input',retired,index=0)
+        self.assertEqual((code,payload['error_code']),(409,'RETIRED_INPUT'))
         code, replay = self.request(path,stop,index=0)
         self.assertEqual(code,200,replay)
         self.assertTrue(replay['data']['idempotent_replay'])
@@ -584,6 +734,163 @@ class IndependentTests(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertEqual(result['data']['mode'],'PROTECTED')
 
+    def test_full_regular_history_accepts_fresh_stop_protect_and_disconnect(self):
+        pilot, peer = self.clients[:2]
+        self.activate(pilot)
+        prefix = '/api/v1/devices/'+pilot.device_id
+        before = pilot.request('/api/state')
+        regular_id = before['recent_commands'][0]['command_id']
+        # 用真实离散配置请求填满普通历史，保留配置版本和当前会话的原有语义。
+        config_count = COMMAND_HISTORY_LIMIT-4  # 前后各有一次切换和一次归中。
+        for version in range(before['config_version'],before['config_version']+config_count):
+            pilot.discrete('/api/config',config_version=version,patch={'sensitivity':.9})
+        pilot.switch('app'); pilot.neutral(); pilot.begin_intent()
+        with self.assertRaises(ClientError) as full:
+            pilot.discrete('/api/config',config_version=before['config_version']+config_count,patch={'sensitivity':.8})
+        self.assertEqual((full.exception.status,full.exception.payload['error_code']),(503,'COMMAND_HISTORY_FULL'))
+
+        self.activate(peer)
+        peer_epoch = peer.control(vy=.1)['control_epoch']
+        moving = pilot.control(vx=.1)
+        stop = dict(pilot.envelope(),command_id='full-history-stop')
+        status, stopped = self.request(prefix+'/stop',stop,index=0)
+        self.assertEqual(status,200)
+        self.assertEqual(stopped['data']['mode'],'HOLD')
+        self.assertNotEqual(stopped['data']['control_epoch'],moving['control_epoch'])
+        self.assertEqual(stopped['receipt']['phase'],'COMPLETED')
+
+        pilot.begin_intent()
+        moving = pilot.control(vx=.1)
+        status, replay = self.request(prefix+'/stop',stop,index=0)
+        self.assertEqual(status,200)
+        self.assertTrue(replay['data']['idempotent_replay'])
+        self.assertEqual(replay['data']['control_epoch'],moving['control_epoch'])
+        self.assertEqual(replay['data']['mode'],'ACTIVE')
+
+        expired = dict(pilot.envelope(),command_id='full-history-expired',sent_at_ms=time.time()*1000-1000)
+        status, error = self.request(prefix+'/protect',expired,index=0)
+        self.assertEqual((status,error['error_code']),(409,'EXPIRED_COMMAND'))
+        status, error = self.request(prefix+'/protect',stop,index=0)
+        self.assertEqual((status,error['error_code']),(409,'COMMAND_ID_REUSED'))
+        fresh = dict(pilot.envelope(),command_id='full-history-protect')
+        self.assertEqual(self.request(prefix+'/protect',fresh)[0],403)
+        self.assertEqual(self.request(prefix+'/protect',fresh,index=1)[0],403)
+        status, protected = self.request(prefix+'/protect',fresh,index=0)
+        self.assertEqual(status,200)
+        self.assertEqual(protected['data']['mode'],'PROTECTED')
+        self.assertEqual(protected['data']['protection_reason'],'EMERGENCY_APP')
+
+        disconnected = dict(pilot.envelope(),command_id='full-history-disconnect',reason='APP_EXIT',
+            control_epoch=protected['data']['control_epoch'])
+        status, released = self.request(prefix+'/disconnect',disconnected,index=0)
+        self.assertEqual(status,200)
+        self.assertEqual(released['receipt']['phase'],'COMPLETED')
+        self.assertEqual(peer.control(vy=.1)['control_epoch'],peer_epoch)
+        for command_id in (regular_id,stop['command_id'],fresh['command_id'],disconnected['command_id']):
+            status, payload = self.request(prefix+'/commands/app/'+command_id,index=0)
+            self.assertEqual(status,200)
+            self.assertEqual(payload['data']['phase'],'COMPLETED')
+
+    def test_safety_receipts_roll_without_dropping_regular_history_or_replaying_evicted_actions(self):
+        pilot = self.clients[0]
+        self.activate(pilot)
+        prefix = '/api/v1/devices/'+pilot.device_id
+        regular_id = pilot.request('/api/state')['recent_commands'][0]['command_id']
+        first = dict(pilot.envelope(),command_id='oldest-safety-receipt')
+        pilot.epoch = pilot.request('/api/stop',first)['control_epoch']
+        for _ in range(SAFETY_COMMAND_HISTORY_LIMIT-1):
+            pilot.discrete('/api/stop')
+        first_query = prefix+'/commands/app/'+first['command_id']
+        self.assertEqual(self.request(first_query,index=0)[0],200)
+
+        expired = dict(pilot.envelope(),command_id='rejected-safety',sent_at_ms=time.time()*1000-1000)
+        status, error = self.request(prefix+'/stop',expired,index=0)
+        self.assertEqual((status,error['error_code']),(409,'EXPIRED_COMMAND'))
+        self.assertEqual(self.request(first_query,index=0)[0],200)
+
+        # 连续超过两倍容量后，最新安全动作仍能执行并查询，普通记录仍在原会话内。
+        for _ in range(SAFETY_COMMAND_HISTORY_LIMIT+2):
+            recent = pilot.discrete('/api/stop')
+        status, error = self.request(first_query,index=0)
+        self.assertEqual((status,error['error_code']),(404,'COMMAND_NOT_FOUND'))
+        self.assertEqual(self.request(prefix+'/commands/app/'+regular_id,index=0)[0],200)
+        self.assertEqual(self.request(prefix+'/commands/app/'+recent['command_id'],index=0)[0],200)
+        service = self.fleet.members[pilot.device_id]
+        self.assertEqual(len(service.records),2+SAFETY_COMMAND_HISTORY_LIMIT)
+        self.assertEqual(len(service.command_view),len(service.records))
+
+        pilot.begin_intent()
+        moving = pilot.control(vx=.1)
+        # 原序号已失效，即使重新填入当前时刻和轮次，已换出的原报文也不能重新执行。
+        stale = dict(first,control_epoch=moving['control_epoch'],sent_at_ms=time.time()*1000)
+        status, error = self.request(prefix+'/stop',stale,index=0)
+        self.assertEqual((status,error['error_code']),(409,'STALE_SEQUENCE'))
+        self.assertEqual(pilot.request('/api/state')['mode'],'ACTIVE')
+
+        reopened = pilot.open_session()
+        self.assertEqual(reopened['control_epoch_reason'],'SESSION_REPLACED')
+        self.assertEqual(self.request(prefix+'/commands/app/'+recent['command_id'],index=0)[0],404)
+        self.assertFalse(service.records)
+
+    def test_full_member_queue_still_executes_safety_and_fences_queued_motion(self):
+        pilot, peer = self.clients[:2]
+        self.activate(pilot); self.activate(peer)
+        path = '/api/v1/devices/'+pilot.device_id
+        service = self.fleet.members[pilot.device_id]
+        for action,mode in (('stop','HOLD'),('protect','PROTECTED')):
+            with self.subTest(action=action):
+                pilot.begin_intent()
+                moving = pilot.control(vx=.1)
+                peer_before = peer.control(vy=.1)['control_epoch']
+                queued = dict(pilot.envelope(),intent_sequence=pilot.intent,frame='world',axes=[.1,0,0,0])
+                overflow = dict(pilot.envelope(),intent_sequence=pilot.intent,frame='world',axes=[.1,0,0,0])
+                entered, release = threading.Event(), threading.Event()
+                execute = service.execute
+                safety_admitted = threading.Event()
+                enqueue = service.commands.put_nowait
+
+                def pause_consumer(item):
+                    if item['path']=='/api/heartbeat':
+                        entered.set()
+                        release.wait(1.)
+                    return execute(item)
+
+                def track_admission(entry):
+                    enqueue(entry)
+                    if entry[2]['path']=='/api/'+action:
+                        safety_admitted.set()
+
+                with (patch.object(service,'execute',pause_consumer),
+                      patch.object(service.commands,'put_nowait',track_admission),
+                      concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool):
+                    current = pool.submit(self.request,path+'/heartbeat',pilot.envelope(),0)
+                    try:
+                        self.assertTrue(entered.wait(1.))
+                        # 固定填入 128 个已排队普通报文，避免依赖系统能否同时建立 128 个连接。
+                        for _ in range(COMMAND_QUEUE_LIMIT):
+                            item = dict(path='/api/input',source='app',body=queued,received=time.monotonic(),
+                                epoch=time.time()*1000,done=threading.Event(),claim_lock=threading.Lock(),queue_state='QUEUED')
+                            service.commands.put_nowait((2,next(service.queue_counter),item))
+                        last = item
+                        status,error = self.request(path+'/input',overflow,index=0)
+                        self.assertEqual((status,error['error_code']),(503,'QUEUE_FULL'))
+                        safety = dict(pilot.envelope(),command_id='queued-'+action)
+                        pending = pool.submit(self.request,path+'/'+action,safety,0)
+                        self.assertTrue(safety_admitted.wait(.35))
+                        self.assertEqual(service.commands.qsize(),COMMAND_QUEUE_LIMIT+1)
+                    finally:
+                        release.set()
+                    self.assertEqual(current.result(timeout=3)[0],200)
+                    status,payload = pending.result(timeout=3)
+                self.assertEqual(status,200)
+                self.assertEqual(payload['data']['mode'],mode)
+                self.assertEqual(payload['receipt']['phase'],'COMPLETED')
+                self.assertNotEqual(payload['data']['control_epoch'],moving['control_epoch'])
+                self.assertTrue(last['done'].wait(.5))
+                self.assertIn(last['error'].code,('STALE_SEQUENCE','STALE_EPOCH'))
+                self.assertEqual(pilot.request('/api/state')['mode'],mode)
+                self.assertEqual(peer.control(vy=.1)['control_epoch'],peer_before)
+
     def test_sse_contains_all_three_members_for_observer(self):
         connection = http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=3)
         try:
@@ -606,7 +913,9 @@ class LogsQueryTests(unittest.TestCase):
         self.directory = temporary_directory()
         self.config = json.loads(Path('cluster_config.json').read_text('utf-8'))
         self.credentials = json.loads(Path('independent_credentials.json').read_text('utf-8'))
-        self.fleet = IndependentFleet(self.config,self.credentials,self.directory.name)
+        # 覆盖命令行 --results 指定相对路径的正常用法。
+        relative_results = Path(self.directory.name).relative_to(Path.cwd())
+        self.fleet = IndependentFleet(self.config,self.credentials,relative_results)
         self.server = make_independent_server(self.fleet,port=0)
         self.thread = threading.Thread(target=lambda:self.server.serve_forever(poll_interval=.02),daemon=True)
         self.thread.start()
@@ -679,6 +988,47 @@ class LogsQueryTests(unittest.TestCase):
         self.assertEqual(code,200,result)
         self.assertEqual(result['data']['total'],1)
         self.assertEqual(result['data']['events'][0]['command_id'],'c1')
+
+    def test_ack_audit_preserves_only_validated_motion_fields_and_exports_them(self):
+        credential = self.credentials['credentials'][0]
+        pilot = IndependentClient(credential['device_id'],credential['token'],
+            f'http://127.0.0.1:{self.server.server_port}')
+        self.addCleanup(pilot.close)
+        pilot.open_session(); pilot.switch('app'); pilot.neutral(); pilot.begin_intent()
+        axes = [0.,-.5,0.,.1]
+        body = dict(pilot.envelope(),axes=axes,frame='world',intent_sequence=pilot.intent,
+            token='not-an-audit-field')
+        self.assertEqual(pilot.request('/api/input',body)['mode'],'ACTIVE')
+        with self.assertRaises(ClientError) as rejected:
+            pilot.request('/api/input',dict(body,axes=[0.,.5,0.,0.]))
+        self.assertEqual(rejected.exception.payload['error_code'],'STALE_SEQUENCE')
+        pilot.control(vx=.12,frame='heading')
+        pilot.heartbeat()
+
+        # 观察端能查到已受理的输入，重复序号不会生成第二条成功记录。
+        baseline = self.wait_for_events(self.fleet.audit.status()['accepted'])
+        events = [row for row in baseline['events'] if row['event']=='COMMAND_ACK']
+        inputs = [row for row in events if row['path']=='/api/input']
+        self.assertEqual(len(inputs),1)
+        motion = inputs[0]
+        for key in ('axes','frame','control_epoch','intent_sequence','ttl_ms','sent_at_ms'):
+            self.assertEqual(motion[key],body[key])
+        self.assertFalse({'token','session_id'} & motion.keys())
+        velocity = next(row for row in events if row['path']=='/api/control')
+        self.assertEqual((velocity['vx_m_s'],velocity['frame']),(.12,'heading'))
+        self.assertNotIn('axes',velocity)
+        heartbeat = next(row for row in events if row['path']=='/api/heartbeat')
+        self.assertNotIn('frame',heartbeat)
+
+        for fmt in ('jsonl','csv'):
+            with self.subTest(format=fmt):
+                path = '/api/v1/logs/export?format='+fmt+'&snapshot='+baseline['snapshot']
+                code, payload, _ = self.request(path,raw=True)
+                self.assertEqual(code,200)
+                lines = payload.decode('utf-8-sig').splitlines()
+                exported = [json.loads(line) for line in lines] if fmt=='jsonl' else list(csv.DictReader(lines))
+                row = next(row for row in exported if row.get('path')=='/api/input')
+                self.assertEqual((row if fmt=='jsonl' else json.loads(row['detail']))['axes'],axes)
 
     def test_pagination_offset_limit_and_cap(self):
         baseline = self.wait_for_events(3)

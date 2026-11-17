@@ -5,15 +5,17 @@ from pathlib import Path
 import time
 import threading
 import uuid
-from app_server import APIError, DEMO_TOKENS
+from app_server import APIError, DEMO_TOKENS, safety_action_path
 from async_audit import AsyncAudit
 from cluster_manager import MEMBER_PATHS
 from cluster_member import ManagedMember
 from config_validation import validate_cluster_config
+from control_config import INPUT_TTL_MAX_MS
 from logs_query import LogIndex
-from runtime_info import IMPLEMENTATION_VERSION, identifier
+from runtime_info import (FOCUS_PEER_TARGET_HZ, IMPLEMENTATION_VERSION, INDEPENDENT_AUDIT_FILENAME,
+    MAX_CLIENT_CLOCK_AHEAD_MS, SSE_IDLE_HEARTBEAT_MS, SSE_REPLAY_FRAMES, STATE_PUBLISHER_TIMEOUT_MS,
+    STATE_STREAM_TARGET_HZ, identifier, is_continuous)
 from unified_contract import device_descriptor, device_state, snapshot
-
 
 def validate_credentials(value, device_ids):
     if not isinstance(value, dict) or set(value) != {'credentials'} or not isinstance(value['credentials'], list):
@@ -68,18 +70,19 @@ class IndependentFleet:
         if self.config['limits']['max_controlled'] < len(self.config['members']):
             raise ValueError('独立操控模式的受控容量不得小于启动成员数')
         self.cluster_id = config['cluster_id']
+        self.member_stale_after_ms = self.config['limits']['lost_timeout_s']*1000
         self.identities = validate_credentials(credentials, {s['device_id'] for s in config['members']})
         self.boot_id = uuid.uuid4().hex
         self.members = {}
         self.state_changed = threading.Event()
         # 审计日志落盘目录；命名避开本类的 directory() 设备目录方法。
-        self.results_directory = Path(directory)
-        self.audit = AsyncAudit(Path(directory)/'fleet_events.jsonl')
+        self.results_directory = Path(directory).resolve()
+        self.audit = AsyncAudit(self.results_directory/INDEPENDENT_AUDIT_FILENAME)
         self.logs_index = LogIndex(self.results_directory,sorted(s['device_id'] for s in self.config['members']))
         try:
             for spec in self.config['members']:
                 name = spec['device_id']
-                service = IndependentMember(spec, self.cluster_id, DEMO_TOKENS, Path(directory)/name, self.audit)
+                service = IndependentMember(spec, self.cluster_id, DEMO_TOKENS, self.results_directory/name, self.audit)
                 self.members[name] = service
                 service.state_changed = self.state_changed
                 service.start()
@@ -119,7 +122,7 @@ class IndependentFleet:
         state, stepped_at = service.published_snapshot()
         raw = copy.deepcopy(state) if copy_state else dict(state)
         age = max(0., (time.monotonic()-stepped_at)*1000)
-        online = not service.failure and service.thread.is_alive() and age<self.config['limits']['lost_timeout_s']*1000
+        online = not service.failure and service.thread.is_alive() and age<self.member_stale_after_ms
         raw.update(online=online,state_age_ms=age,link_status='ONLINE' if online else 'LOST',
             loss_reason=None if online else 'MEMBER_LOST',data_quality='SIMULATION' if online else 'STALE')
         return raw
@@ -183,9 +186,17 @@ class IndependentFleet:
                 hud_state_metadata=True,sse_comment_heartbeat=True,sse_resume=True,sse_focus=True,
                 state_publisher_health=True),
             control_policy=dict(default_frame='WORLD',axes_order=['X','Y','Z','YAW'],
-                input_ttl_max_ms=500,state_stream_target_hz=25,observe_grants_control=False,
+                input_ttl_max_ms=INPUT_TTL_MAX_MS,state_stream_target_hz=STATE_STREAM_TARGET_HZ,observe_grants_control=False,
                 source_switch='USER_SWITCH_NEUTRAL',one_session_per_device_source=True,
                 session_replacement='USER_ACTION_STOPS_ONLY_THIS_DEVICE'),
+            # 布尔能力表与数值参数分别返回，现有 APP 仍可按旧模型解码。
+            link_policy=dict(state_stream_target_hz=STATE_STREAM_TARGET_HZ,
+                member_state_stale_after_ms=self.member_stale_after_ms,
+                sse_idle_heartbeat_ms=SSE_IDLE_HEARTBEAT_MS, sse_replay_frames=SSE_REPLAY_FRAMES,
+                focus_peer_target_hz=FOCUS_PEER_TARGET_HZ, state_publisher_timeout_ms=STATE_PUBLISHER_TIMEOUT_MS,
+                recommended_sse_read_timeout_ms=3*SSE_IDLE_HEARTBEAT_MS,
+                recommended_sse_first_frame_timeout_ms=3*SSE_IDLE_HEARTBEAT_MS,
+                input_ttl_max_ms=INPUT_TTL_MAX_MS, max_client_clock_ahead_ms=MAX_CLIENT_CLOCK_AHEAD_MS),
             routes=dict(devices='/api/v1/devices',state='/api/v1/state',events='/api/v1/events',
                 logs='/api/v1/logs',logs_export='/api/v1/logs/export',
                 control_prefix='/api/v1/devices/{device_id}'))
@@ -199,18 +210,30 @@ class IndependentFleet:
         if body.get('cluster_id') != self.cluster_id:
             raise APIError(400,'集群标识不匹配','WRONG_CLUSTER')
         service = self._service(name)
-        if not self.member_state(name, copy_state=False)['online']:
+        state = self.member_state(name, copy_state=False)
+        if not state['online']:
             raise APIError(503,'该飞机失联，拒绝指令','MEMBER_LOST')
         if path == '/api/session' and body.get('user_initiated') is not True:
             raise APIError(400,'申请或替换会话须由用户主动操作','USER_ACTION_REQUIRED')
-        if self.audit.failure and path not in ('/api/protect','/api/stop','/api/disconnect'):
+        source = identity['source']
+        if self.audit.failure and not safety_action_path(path,body,source,state['control_config']['input_policy']):
             raise APIError(503,'审计不可用，普通操纵已停用','AUDIT_UNAVAILABLE')
         # 无全局选中状态、无全局写锁；成员原执行器负责 TTL、epoch、序号、来源和能力校验。
-        result = service.submit(path,copy.deepcopy(body),identity['source'])
-        logged = self.audit.emit(dict(event='COMMAND_ACK',device_id=name,boot_id=service.boot_id,
-            client_id=identity['client_id'],source=identity['source'],path=path,
-            sequence=body.get('command_sequence'),command_id=body.get('command_id'),server_time_ms=time.time()*1000))
-        if not logged and path not in ('/api/protect','/api/stop','/api/disconnect'):
+        result = service.submit(path,copy.deepcopy(body),source)
+        event = dict(event='COMMAND_ACK',device_id=name,boot_id=service.boot_id,
+            client_id=identity['client_id'],source=source,path=path,
+            sequence=body.get('command_sequence'),command_id=body.get('command_id'),server_time_ms=time.time()*1000)
+        if path!='/api/heartbeat' and is_continuous(path,body):
+            # 只记录已通过校验的运动输入字段，供联调核对方向和幅度。轴值保留映射前的数值。
+            event.update(control_epoch=body['control_epoch'],intent_sequence=body['intent_sequence'],
+                frame=body.get('frame','heading'),ttl_ms=body['ttl_ms'],sent_at_ms=body['sent_at_ms'])
+            if path=='/api/control':
+                event.update(vx_m_s=body['vx_m_s'],vy_m_s=body['vy_m_s'],vz_m_s=body['vz_m_s'],
+                    yaw_rate_rad_s=body['yaw_rate_rad_s'])
+            else:
+                event['axes'] = body['axes'].copy()
+        logged = self.audit.emit(event)
+        if not logged and not safety_action_path(path,body,source,result['control_config']['input_policy']):
             raise APIError(503,'成员已处理请求，但审计异常；查询状态，禁止重发运动','ACK_OUTCOME_UNKNOWN')
         return result
 

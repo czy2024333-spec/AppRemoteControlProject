@@ -15,7 +15,8 @@ from app_server import APIError
 from http_transport import JsonHandler, TransportError, strict_loads, validate_origins
 from independent_fleet import IndependentFleet
 from logs_query import LogError
-from runtime_info import identifier
+from runtime_info import (DEFAULT_INDEPENDENT_RESULTS, FOCUS_PEER_TARGET_HZ, SSE_IDLE_HEARTBEAT_MS, SSE_REPLAY_FRAMES,
+    STATE_PUBLISHER_TIMEOUT_MS, STATE_STREAM_TARGET_HZ, identifier)
 from unified_contract import error_detail, receipt
 
 
@@ -30,34 +31,66 @@ class StreamFrame:
 class StateFeed:
     """每台服务共享一份有界状态历史。客户端写入在各自 HTTP 线程完成。"""
 
-    max_progress_gap_s = 1.
+    max_progress_gap_s = STATE_PUBLISHER_TIMEOUT_MS/1000
 
     def __init__(self, fleet, stopping):
         self.fleet = fleet
         self.stopping = stopping
         self.changed = threading.Condition()
-        self.history = deque(maxlen=50)
+        self.history = deque(maxlen=SSE_REPLAY_FRAMES)
         self.last_progress_at = time.monotonic()
         self.failure = None
         self.thread = threading.Thread(target=self.run, name='independent-state-feed', daemon=True)
         self.thread.start()
 
+    @staticmethod
+    def _aligned_capture_time(deadline, now, origins, step_period):
+        # 以计划步进加 2 ms 估计状态就绪时刻，在所有成员的就绪时刻间选最大的空档。
+        phases = sorted((origin + .002 - deadline) % step_period for origin in origins)
+        following = phases[1:] + [phases[0] + step_period]
+        start, end = max(zip(phases, following), key=lambda gap: gap[1] - gap[0])
+        midpoint = (start + end) / 2
+        # 取离原发布计划最近的同相时刻，启动时顺延到下一处空档。
+        offset = (midpoint + step_period/2) % step_period - step_period/2
+        shifted = deadline + offset
+        return shifted if shifted >= now else shifted + step_period
+
     def run(self):
         next_capture = 0.
+        capture_period = 1/STATE_STREAM_TARGET_HZ
+        aligned_origins = None
         previous = None
         try:
+            member_ids = sorted(self.fleet.members)
+            members = [self.fleet.members[name] for name in member_ids]
+            periods = {member.core.dt for member in members}
+            step_period = periods.pop() if len(periods) == 1 else None
+            steps_per_frame = capture_period / step_period if step_period else 0.
+            alignable = steps_per_frame >= 1. and math.isclose(steps_per_frame, round(steps_per_frame))
             while not self.stopping.is_set():
                 # 发布唤醒触发取样。无发布时也检查超时，保证冻结能切换到 LOST。
                 self.fleet.state_changed.wait(.1)
                 self.fleet.state_changed.clear()
-                if self.stopping.wait(max(0., next_capture-time.monotonic())):
+                now = time.monotonic()
+                if alignable:
+                    # 仅在启动、步进重新计时或发布错过一整周期时重新选取采样相位。
+                    origins = tuple(member.tick_schedule_origin for member in members)
+                    if origins != aligned_origins and all(origin is not None for origin in origins):
+                        next_capture = self._aligned_capture_time(max(next_capture, now), now, origins, step_period)
+                        aligned_origins = origins
+                # 按绝对发布时刻短睡，避免 Windows Event.wait 把短超时拉长。
+                delay = next_capture-now
+                if delay > 0.:
+                    time.sleep(delay)
+                if self.stopping.is_set():
                     return
                 now = time.monotonic()
                 # 沿计划时刻推进，避免把 Windows 线程唤醒延迟累计到每一帧。
-                next_capture += .04
+                next_capture += capture_period
                 if next_capture <= now:
-                    next_capture = now + .04
-                states = [self.fleet.member_state(name, copy_state=False) for name in sorted(self.fleet.members)]
+                    next_capture = now + capture_period
+                    aligned_origins = None
+                states = [self.fleet.member_state(name, copy_state=False) for name in member_ids]
                 signature = tuple((s['boot_id'],s['sequence'],s['server_time_ms'],s['online'],
                     s['mode'],s['control_epoch'],s['selected_source'],s['pending_source'],s['last_applied']) for s in states)
                 signature = (signature, self.fleet.audit.failure)
@@ -89,13 +122,21 @@ class StateFeed:
         with self.changed:
             now = time.monotonic()
             problem = self._problem(now)
-            return dict(healthy=problem is None, thread_alive=self.thread.is_alive(), reason=problem,
+            status = dict(healthy=problem is None, thread_alive=self.thread.is_alive(), reason=problem,
                 progress_age_ms=(now-self.last_progress_at)*1000, progress_timeout_ms=self.max_progress_gap_s*1000)
+            captures = [frame.captured_at for frame in self.history]
+        # 复用有界的续传历史，锁外统计共享采样间隔。空闲心跳不计入样本。
+        gaps = sorted((end-start)*1000 for start,end in zip(captures,captures[1:]))
+        status['cadence'] = dict(target_hz=STATE_STREAM_TARGET_HZ, samples=len(gaps),
+            capture_gap_p95_ms=gaps[math.ceil(.95*len(gaps))-1] if gaps else None,
+            capture_gap_max_ms=gaps[-1] if gaps else None,
+            latest_frame_age_ms=(now-captures[-1])*1000 if captures else None)
+        return status
 
     def frames_after(self, cursor, replay):
         with self.changed:
             self.changed.wait_for(lambda: self._problem(time.monotonic()) or
-                bool(self.history and self.history[-1].number != cursor), timeout=self.max_progress_gap_s)
+                bool(self.history and self.history[-1].number != cursor), timeout=SSE_IDLE_HEARTBEAT_MS/1000)
             if self._problem(time.monotonic()):
                 # 结束已有连接，让客户端走断线处理，避免继续发送心跳掩盖故障。
                 return None, False
@@ -159,6 +200,7 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 if number.isascii() and number.isdigit() and len(number)<=18:
                     cursor = int(number)
             next_peers = None
+            peer_period = 1/FOCUS_PEER_TARGET_HZ
             subscribed_at = time.monotonic()
             self.send_response(200)
             self.send_header('Content-Type','text/event-stream; charset=utf-8')
@@ -185,7 +227,7 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                                 include_peers = next_peers is None or frame.captured_at >= next_peers
                                 if include_peers:
                                     next_peers = (frame.captured_at if next_peers is None else
-                                        next_peers+math.floor((frame.captured_at-next_peers)/.1)*.1)+.1
+                                        next_peers+math.floor((frame.captured_at-next_peers)/peer_period)*peer_period)+peer_period
                                 data['members'] = [member if member['device_id']==focus else peer_summary(member)
                                     for member in data['members'] if member['device_id']==focus or include_peers]
                                 data.update(partial=True, focus_device_id=focus, peers_included=include_peers)
@@ -198,7 +240,8 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                                 write_permitted=identity['role']=='CONTROLLER' and is_self))
                         data.update(sent_at_unix_ms=time.time()*1000,
                             replayed=replay and not resync and frame.captured_at <= subscribed_at)
-                        payload = json.dumps(data,ensure_ascii=False,allow_nan=False)
+                        # 缩减每帧 JSON 的字节数，保留所有字段和原有 SSE 行顺序。
+                        payload = json.dumps(data,ensure_ascii=False,allow_nan=False,separators=(',',':'))
                         # 兼容按顺序读取 event 和 data 的旧工具，id 在事件结束前附加。
                         message = f'event: state\ndata: {payload}\nid: {prefix}{frame.number}\n\n'
                         self.wfile.write(message.encode('utf-8'))
@@ -311,7 +354,8 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 if post:
                     self.close_connection = True
                 self.reply(exc.status,dict(ok=False,error=exc.message,error_code=exc.code,
-                    error_detail=error_detail(exc.code,exc.message,name,body.get('command_id') if body else None)))
+                    error_detail=error_detail(exc.code,exc.message,name,body.get('command_id') if body else None,
+                        timing=getattr(exc,'timing',None))))
             except (ValueError,TypeError,KeyError) as exc:
                 self.close_connection = True
                 self.reply(400,dict(ok=False,error=str(exc),error_code='INVALID_ARGUMENT',
@@ -345,7 +389,7 @@ def main():
     parser.add_argument('--port',type=int,default=8765)
     parser.add_argument('--config',type=Path,default=Path(__file__).with_name('cluster_config.json'))
     parser.add_argument('--credentials',type=Path,default=Path(__file__).with_name('independent_credentials.json'))
-    parser.add_argument('--results',type=Path,default=Path(__file__).parent/'results/independent_live')
+    parser.add_argument('--results',type=Path,default=DEFAULT_INDEPENDENT_RESULTS)
     parser.add_argument('--allow-origin',action='append',default=[])
     args = parser.parse_args()
     fleet = IndependentFleet(strict_loads(args.config.read_text('utf-8-sig')),

@@ -24,6 +24,7 @@ def add_hud_state_fields(state):
     fields['sensors'].setdefault('properties',{})['local_position_velocity'] = dict(
         type='object',properties=dict(**freshness,stale_after_ms=dict(type='integer',nullable=True)))
     fields['control']['properties'].update(active=dict(type='boolean'),awaiting_neutral=dict(type='boolean'),
+        epoch_reason=dict(type='string',nullable=True,description='推进该控制轮次的原因'),
         last_applied=dict(type='object',nullable=True,properties=dict(control_epoch=dict(type='string'),
             source=dict(type='string'),intent_sequence=dict(type='integer'),command_sequence=dict(type='integer'))))
     fields.update(protection=dict(type='object',properties=dict(latched=dict(type='boolean'),

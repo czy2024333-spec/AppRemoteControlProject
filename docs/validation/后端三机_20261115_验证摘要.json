@@ -1,0 +1,709 @@
+{
+  "validation_date": "2026-11-15",
+  "pr_number": 4,
+  "baseline_backend_commit": "c8f030ed686abfd87bff56454487ce8543398461",
+  "deployment_mode": "INDEPENDENT",
+  "unified_contract_version": "1.0",
+  "scope": "Windows 11 build 26200，CPython 3.13.14。本机回环。三机控制与心跳、八路 SSE、健康检查、日志导出及中途重连。",
+  "regression": {
+    "backend": {
+      "passed": 154,
+      "failed": 0
+    },
+    "dynamics": {
+      "passed": 26,
+      "failed": 0,
+      "skipped": 1,
+      "skipped_case": "test_lab.Day1Tests.test_finished_run_summaries",
+      "skip_reason": "历史实验产物检查需另行生成对应结果并按条件开启。"
+    },
+    "earlier_backend_checks": [
+      {
+        "round": 1,
+        "passed": 135
+      },
+      {
+        "round": 2,
+        "passed": 142
+      },
+      {
+        "round": 3,
+        "passed": 148
+      },
+      {
+        "round": 4,
+        "passed": 152
+      }
+    ],
+    "note": "较早一次失联注入回归出现 STALE_EPOCH，单项和最终全量复跑通过，偶发原因待确认。"
+  },
+  "latest_mixed_load": {
+    "seconds": 60,
+    "passed": true,
+    "simulation_hz_per_device": 50,
+    "audit_drained": true,
+    "controls": [
+      {
+        "device_id": "sim-drone-1",
+        "samples": 1191,
+        "heartbeats": 596,
+        "p95_ms": 5.648699996527284,
+        "p99_ms": 6.715400006214622,
+        "max_ms": 16.56939999520546,
+        "server_queue_and_apply_ms": {
+          "p95_ms": 2.7674000011757016,
+          "p99_ms": 3.3575000052223913,
+          "p99_9_ms": 3.9931999999680556,
+          "max_ms": 4.263100003299769
+        }
+      },
+      {
+        "device_id": "sim-drone-2",
+        "samples": 1191,
+        "heartbeats": 596,
+        "p95_ms": 5.736499995691702,
+        "p99_ms": 7.0647999964421615,
+        "max_ms": 42.5969999996596,
+        "server_queue_and_apply_ms": {
+          "p95_ms": 2.899500002968125,
+          "p99_ms": 3.8982999976724386,
+          "p99_9_ms": 4.7081000011530705,
+          "max_ms": 31.091999997443054
+        }
+      },
+      {
+        "device_id": "sim-drone-3",
+        "samples": 1190,
+        "heartbeats": 595,
+        "p95_ms": 5.5738000010023825,
+        "p99_ms": 6.585799994354602,
+        "max_ms": 16.731299998355098,
+        "server_queue_and_apply_ms": {
+          "p95_ms": 2.7409000031184405,
+          "p99_ms": 3.2482999959029257,
+          "p99_9_ms": 4.2644999994081445,
+          "max_ms": 7.204900000942871
+        }
+      }
+    ],
+    "sse": [
+      {
+        "client_id": "pilot-1",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 2.688800000178162,
+          "p99_ms": 3.501000000105705,
+          "p99_9_ms": 38.84020000172313,
+          "max_ms": 40.039899999974295
+        },
+        "receive_gaps_over_2_periods": 1,
+        "simulation_gap_counts_ms": {
+          "sim-drone-1": {
+            "40.0": 1498
+          },
+          "sim-drone-2": {
+            "40.0": 1498
+          },
+          "sim-drone-3": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 6.332899996777996
+      },
+      {
+        "client_id": "pilot-2",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 2.585700000927318,
+          "p99_ms": 3.483699999342207,
+          "p99_9_ms": 36.45790000067791,
+          "max_ms": 38.8338999991538
+        },
+        "receive_gaps_over_2_periods": 0,
+        "simulation_gap_counts_ms": {
+          "sim-drone-1": {
+            "40.0": 1498
+          },
+          "sim-drone-2": {
+            "40.0": 1498
+          },
+          "sim-drone-3": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 6.612999997742008
+      },
+      {
+        "client_id": "pilot-3",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 2.6295999987632968,
+          "p99_ms": 3.3495000016409904,
+          "p99_9_ms": 39.384499998996034,
+          "max_ms": 40.260399998223875
+        },
+        "receive_gaps_over_2_periods": 1,
+        "simulation_gap_counts_ms": {
+          "sim-drone-1": {
+            "40.0": 1498
+          },
+          "sim-drone-2": {
+            "40.0": 1498
+          },
+          "sim-drone-3": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 5.196400001295842
+      },
+      {
+        "client_id": "observer",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 2.757700000947807,
+          "p99_ms": 3.5444000031566247,
+          "p99_9_ms": 35.846999998320825,
+          "max_ms": 38.61699999921257
+        },
+        "receive_gaps_over_2_periods": 0,
+        "simulation_gap_counts_ms": {
+          "sim-drone-1": {
+            "40.0": 1498
+          },
+          "sim-drone-2": {
+            "40.0": 1498
+          },
+          "sim-drone-3": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 5.710199999157339
+      },
+      {
+        "client_id": "pilot-1-hud",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 1.7720999976154417,
+          "p99_ms": 3.4519000028376468,
+          "p99_9_ms": 37.790000001259614,
+          "max_ms": 37.81780000368599
+        },
+        "receive_gaps_over_2_periods": 0,
+        "simulation_gap_counts_ms": {
+          "sim-drone-1": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 7.234199998492841
+      },
+      {
+        "client_id": "pilot-2-hud",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 1.7737999942619354,
+          "p99_ms": 3.581500000145752,
+          "p99_9_ms": 35.583299998543225,
+          "max_ms": 37.65020000078948
+        },
+        "receive_gaps_over_2_periods": 0,
+        "simulation_gap_counts_ms": {
+          "sim-drone-2": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 8.616599996457808
+      },
+      {
+        "client_id": "pilot-3-hud",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 1.842200000246521,
+          "p99_ms": 3.3540000012726523,
+          "p99_9_ms": 35.68590000126278,
+          "max_ms": 35.997499996447004
+        },
+        "receive_gaps_over_2_periods": 0,
+        "simulation_gap_counts_ms": {
+          "sim-drone-3": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 4.678400000557303
+      },
+      {
+        "client_id": "ue-legacy-reader",
+        "samples": 1500,
+        "frames_per_test_second": 25,
+        "receive_gap_abs_error_ms": {
+          "p95_ms": 1.9807000053697266,
+          "p99_ms": 3.570899999467656,
+          "p99_9_ms": 36.03480000398122,
+          "max_ms": 36.05390000215266
+        },
+        "receive_gaps_over_2_periods": 0,
+        "simulation_gap_counts_ms": {
+          "sim-drone-1": {
+            "40.0": 1498
+          }
+        },
+        "reconnect_ms": 6.6330000045127235
+      }
+    ],
+    "service_checks": {
+      "health": 60,
+      "exports": 4,
+      "publisher_cadence": {
+        "target_hz": 25,
+        "samples": 49,
+        "capture_gap_p95_ms": 40.5077999967034,
+        "capture_gap_max_ms": 40.600599997560494,
+        "latest_frame_age_ms": 35.381399997277185
+      }
+    }
+  },
+  "mixed_step_rates": {
+    "sim_rates_hz": [
+      50,
+      55,
+      100
+    ],
+    "seconds": 8,
+    "connections": 8,
+    "sse_hz_min": 25,
+    "sse_hz_max": 25.125
+  },
+  "cadence_comparison": {
+    "short_wait_seconds_per_arm_run": 24,
+    "short_wait_arms": {
+      "event_wait": {
+        "stable_40_ms_intervals": 3186,
+        "total_intervals": 5373,
+        "stable_40_ms_percent": 59.2964824120603,
+        "hud_receive_gap_abs_error_p99_ms": {
+          "min": 11.47209999820916,
+          "median": 11.823499996389728,
+          "max": 12.535100001550745
+        }
+      },
+      "sleep_until_deadline": {
+        "stable_40_ms_intervals": 5372,
+        "total_intervals": 5382,
+        "stable_40_ms_percent": 99.81419546636938,
+        "hud_receive_gap_abs_error_p99_ms": {
+          "min": 2.248900003032759,
+          "median": 2.7163999975891784,
+          "max": 5.22259999794187
+        }
+      }
+    },
+    "scheduled_phase": {
+      "fixed_phase": [
+        {
+          "run": "cadence-after-60s",
+          "seconds": 60,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 362,
+                "40.0": 773,
+                "60.0": 363
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.4832999979844317
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 1498
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.59240000101272
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 1497,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.499100003624335
+            }
+          ]
+        },
+        {
+          "run": "unaligned-01",
+          "seconds": 18,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 95,
+                "40.0": 258,
+                "60.0": 95
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.5255000009201467
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.6020000013522804
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.353299997630529
+            }
+          ]
+        },
+        {
+          "run": "unaligned-02",
+          "seconds": 18,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.5666999944951385
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.399199999636039
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.9166999965673313
+            }
+          ]
+        },
+        {
+          "run": "unaligned-03",
+          "seconds": 18,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.694599998940248
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 3.8708999936352484
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 448
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 2.1670999930938706
+            }
+          ]
+        }
+      ],
+      "aligned_to_tick_schedule": [
+        {
+          "run": "schedule-01",
+          "seconds": 15,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.533199994475581
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.394600001396611
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 3.800599996757228
+            }
+          ]
+        },
+        {
+          "run": "schedule-02",
+          "seconds": 15,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.217799999460112
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 3.865400002687238
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.542099995014723
+            }
+          ]
+        },
+        {
+          "run": "schedule-03",
+          "seconds": 15,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.425500002107583
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.011399999435525
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.130100001057144
+            }
+          ]
+        },
+        {
+          "run": "schedule-04",
+          "seconds": 15,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.344699998036958
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.384200002241414
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.31040000054054
+            }
+          ]
+        },
+        {
+          "run": "schedule-05",
+          "seconds": 15,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 3.847000000823755
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 3.8544000062393025
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 3.378299997129943
+            }
+          ]
+        },
+        {
+          "run": "schedule-06",
+          "seconds": 15,
+          "passed": true,
+          "hud": [
+            {
+              "device_id": "sim-drone-1",
+              "simulation_gap_counts_ms": {
+                "20.0": 1,
+                "40.0": 371,
+                "60.0": 1
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.51330000301823
+            },
+            {
+              "device_id": "sim-drone-2",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 4.188799996918533
+            },
+            {
+              "device_id": "sim-drone-3",
+              "simulation_gap_counts_ms": {
+                "40.0": 373
+              },
+              "sse_hz": 25,
+              "receive_gap_abs_error_p99_ms": 5.691499995882623
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "historical_round4_mixed_load": {
+    "seconds": 60,
+    "sse_hz_by_client": [
+      {
+        "client_id": "pilot-1",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "pilot-2",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "pilot-3",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "observer",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "pilot-1-hud",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "pilot-2-hud",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "pilot-3-hud",
+        "frames_per_test_second": 25
+      },
+      {
+        "client_id": "ue-legacy-reader",
+        "frames_per_test_second": 25
+      }
+    ],
+    "controls": [
+      {
+        "device_id": "sim-drone-1",
+        "samples": 1191,
+        "heartbeats": 596,
+        "p95_ms": 4.999799999495735
+      },
+      {
+        "device_id": "sim-drone-2",
+        "samples": 1190,
+        "heartbeats": 595,
+        "p95_ms": 5.085599999802071
+      },
+      {
+        "device_id": "sim-drone-3",
+        "samples": 1190,
+        "heartbeats": 595,
+        "p95_ms": 5.072099998869817
+      }
+    ],
+    "health_checks": 60,
+    "log_exports": 4
+  },
+  "pending": [
+    "手机 Wi-Fi 操作时延和 HUD 实际刷新",
+    "现场长指令间隔归因",
+    "UE 引擎画面与长时间运行",
+    "审计存储故障就地恢复"
+  ]
+}

@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 import numpy as np
 from app_server import SimulationService
-from runtime_info import IMPLEMENTATION_VERSION, identifier
+from runtime_info import CLUSTER_BARRIER_PATH, IMPLEMENTATION_VERSION, identifier
 from simulation_core import SimulationCore
 from control_config import DEFAULT, update as update_control, validate as validate_control
 
@@ -100,7 +100,7 @@ class ManagedMember(SimulationService):
 
     def execute(self, item):
         # 仅管理器内部调用；HTTP路由与批分发白名单均不暴露此路径。
-        if item['path']=='/__cluster_barrier':
+        if item['path']==CLUSTER_BARRIER_PATH:
             if item['body']['protect']:
                 self.core.protect(item['body']['reason'])
             else:
@@ -111,4 +111,4 @@ class ManagedMember(SimulationService):
         return super().execute(item)
 
     def barrier(self, reason, protect=False):
-        return self.submit('/__cluster_barrier', dict(reason=reason,protect=protect), 'app')
+        return self._submit(CLUSTER_BARRIER_PATH, dict(reason=reason,protect=protect), 'app')

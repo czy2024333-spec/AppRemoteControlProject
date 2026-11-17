@@ -10,6 +10,7 @@ from cluster_manager import ClusterManager
 from cluster_server import make_cluster_server
 from cluster_client import ClusterClient
 from client import ClientError
+from runtime_info import CLUSTER_REQUEST_HISTORY_LIMIT, CLUSTER_SAFETY_HISTORY_LIMIT
 
 
 class ClusterTests(unittest.TestCase):
@@ -217,6 +218,90 @@ class ClusterTests(unittest.TestCase):
         size=len(self.manager.history)
         for _ in range(8): self.app.controls(vx=.1)
         self.assertEqual(len(self.manager.history),size)
+
+    def test_full_cluster_history_accepts_safety_batches_and_replays_only_the_receipt(self):
+        app = self.app
+        group_id = 'capacity-check'
+        with self.manager.lock:
+            # 普通历史前缀用确定性数据预填。最后一条普通记录和所有控制都走真实 HTTP。
+            for index in range(CLUSTER_REQUEST_HISTORY_LIMIT-5):
+                self.manager.history[('app',f'filled-{index}')] = dict(fingerprint='preload',result={})
+        group = app.envelope(group_id=group_id,member_ids=['sim-drone-1'])
+        app.request('/api/cluster/groups',group)
+        self.activate()
+        self.assertEqual(len(self.manager.history),CLUSTER_REQUEST_HISTORY_LIMIT)
+        self.assertTrue(app.request('/api/cluster/groups',group)['idempotent_replay'])
+        self.reject('HISTORY_FULL',lambda:app.manage('/api/cluster/groups',
+            group_id='blocked',member_ids=['sim-drone-1']))
+        self.assertEqual(app.controls(vx=.1)['status'],'APPLIED')
+        before = {row['device_id']:row['control_epoch'] for row in app.state()['members']}
+
+        def packet(path, *, member_changes=None):
+            rows = []
+            for name in app.selection['member_ids']:
+                member_path = (member_changes or {}).get(name,path)
+                fields = dict(intent_sequence=0,frame='world',axes=[.2,0,0,0]) if member_path=='/api/input' else {}
+                rows.append(dict(device_id=name,path=member_path,body=app.member_body(name,member_path,fields)))
+            return app.envelope(selection_id=app.selection['selection_id'],commands=rows)
+
+        route = '/api/cluster/dispatch'
+        self.reject('HISTORY_FULL',lambda:app.request(route,packet('/api/protect',
+            member_changes={'sim-drone-2':'/api/input'})))
+        old_selection = dict(packet('/api/protect'),selection_id='old-selection')
+        self.reject('STALE_SELECTION',lambda:app.request(route,old_selection))
+        expired = packet('/api/protect')
+        expired['sent_at_ms'] -= 1000
+        self.reject('EXPIRED_COMMAND',lambda:app.request(route,expired))
+        wrong_target = packet('/api/protect')
+        wrong_target['commands'].pop()
+        self.reject('TARGET_MISMATCH',lambda:app.request(route,wrong_target))
+        self.assertFalse(self.manager.safety_history['app'])
+
+        stop = packet('/api/stop')
+        result = app.request(route,stop)
+        self.assertEqual((result['status'],result['succeeded']),('APPLIED',3))
+        stopped = {row['device_id']:row['data']['control_epoch'] for row in result['results']}
+        self.assertTrue(all(row['data']['mode']=='HOLD' for row in result['results']))
+        self.assertTrue(all(stopped[name]!=epoch for name,epoch in before.items()))
+        replay = app.request(route,stop)
+        self.assertTrue(replay['idempotent_replay'])
+        self.assertEqual(replay['results'],result['results'])
+        self.assertEqual({row['device_id']:row['control_epoch'] for row in app.state()['members']},stopped)
+        changed = copy.deepcopy(stop)
+        changed['commands'][0]['path'] = '/api/protect'
+        self.reject('REQUEST_ID_REUSED',lambda:app.request(route,changed))
+
+        # 一个成员带过期报文，另两个仍执行。重试保留原逐成员结果及命令回执。
+        protect = packet('/api/protect')
+        protect['commands'][1]['body']['sent_at_ms'] -= 1000
+        result = app.request(route,protect)
+        self.assertEqual((result['status'],result['succeeded'],result['failed']),('PARTIAL',2,1))
+        self.assertEqual(result['results'][1]['error_code'],'EXPIRED_COMMAND')
+        replay = app.request(route,protect)
+        self.assertTrue(replay['idempotent_replay'])
+        self.assertEqual(replay['results'],result['results'])
+        for row in protect['commands'][::2]:
+            receipt = app.request(f"/api/devices/{row['device_id']}/commands/app/{row['body']['command_id']}")
+            self.assertEqual(receipt['status'],'COMPLETED')
+        self.assertEqual(app.batch('/api/protect')['succeeded'],3)
+        self.assertTrue(all(row['mode']=='PROTECTED' for row in app.state()['members']))
+        self.assertEqual(len(self.manager.history),CLUSTER_REQUEST_HISTORY_LIMIT)
+
+    def test_cluster_safety_history_rolls_and_old_sequence_cannot_reexecute(self):
+        app = self.app
+        self.activate('single',device_id='sim-drone-1')
+        route = '/api/cluster/dispatch'
+        first = app.envelope(selection_id=app.selection['selection_id'],commands=[dict(device_id='sim-drone-1',
+            path='/api/stop',body=app.member_body('sim-drone-1','/api/stop',{}))])
+        self.assertEqual(app.request(route,first)['status'],'APPLIED')
+        for _ in range(CLUSTER_SAFETY_HISTORY_LIMIT):
+            self.assertEqual(app.batch('/api/stop')['status'],'APPLIED')
+        self.assertEqual(len(self.manager.safety_history['app']),CLUSTER_SAFETY_HISTORY_LIMIT)
+        fresh_time = dict(first,sent_at_ms=time.time()*1000)
+        self.reject('STALE_CLUSTER_SEQUENCE',lambda:app.request(route,fresh_time))
+        self.assertEqual(len(self.manager.history),4)
+        app.open()
+        self.assertFalse(self.manager.safety_history['app'])
 
     def test_member_control_configuration_persists_without_affecting_others(self):
         from cluster_member import ManagedMember

@@ -9,15 +9,15 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from app_server import APIError, DEMO_TOKENS
-from runtime_info import IMPLEMENTATION_VERSION, is_continuous, identifier
+from app_server import APIError, DEMO_TOKENS, SAFETY_PATHS, number, safety_action_path
+from runtime_info import (CLUSTER_REQUEST_HISTORY_LIMIT, CLUSTER_SAFETY_HISTORY_LIMIT,
+    IMPLEMENTATION_VERSION, MAX_CLIENT_CLOCK_AHEAD_MS, identifier, is_continuous)
 from cluster_member import ManagedMember, validate_member
 
 MEMBER_PATHS = {'/api/session','/api/heartbeat','/api/switch','/api/adaptive-switch',
     '/api/neutral','/api/control','/api/input','/api/stop','/api/protect','/api/resume',
     '/api/cancel','/api/disconnect','/api/config','/api/ring-event','/api/voice-result',
     '/api/voice','/api/confirm'}
-SAFETY_PATHS = {'/api/stop','/api/protect','/api/disconnect'}
 
 
 class ClusterManager:
@@ -50,6 +50,7 @@ class ClusterManager:
         self.audit_path = self.directory/'cluster_events.jsonl'
         self.members, self.groups, self.used_ids = {}, {}, set()
         self.sessions, self.history = {}, {}
+        self.safety_history = {source:{} for source in self.tokens}
         self.selection = None
         self.revision = 0
         self.stop_event = threading.Event()
@@ -197,6 +198,7 @@ class ClusterManager:
             session = dict(id=uuid.uuid4().hex, sequence=-1)
             self.sessions[source] = session
             self.history = {k:v for k,v in self.history.items() if k[0]!=source}
+            self.safety_history[source].clear()
             self._audit('CLUSTER_SESSION_CREATED', source=source)
             return dict(cluster_session_id=session['id'], cluster_id=self.cluster_id, revision=self.revision)
 
@@ -211,24 +213,32 @@ class ClusterManager:
         key = (source,request_id)
         fingerprint = hashlib.sha256(json.dumps(dict(path=path,body={k:v for k,v in body.items()
             if k not in ('sent_at_ms','ttl_ms')}),sort_keys=True,allow_nan=False).encode()).hexdigest()
-        if key in self.history:
-            old = self.history[key]
+        safety_history = self.safety_history[source]
+        old = self.history.get(key) or safety_history.get(key)
+        if old is not None:
             if old['fingerprint']!=fingerprint:
                 raise APIError(409,'request_id不能复用于不同内容','REQUEST_ID_REUSED')
-            return key,fingerprint,copy.deepcopy(old['result'])
-        if len(self.history)>=2048 and not self._continuous(path,body):
-            raise APIError(503,'集群请求历史已满，请停止后重建集群会话','HISTORY_FULL')
+            return key,fingerprint,copy.deepcopy(old['result']),None
+        if self._continuous(path,body):
+            history = None
+        elif self._safety_batch(source,path,body):
+            history = safety_history
+        else:
+            history = self.history
+            if len(history)>=CLUSTER_REQUEST_HISTORY_LIMIT:
+                raise APIError(503,'集群请求历史已满，请停止后重建集群会话','HISTORY_FULL')
         seq = body.get('sequence')
         if type(seq) is not int or seq<=session['sequence']:
             raise APIError(409,'集群序号重复或倒退','STALE_CLUSTER_SEQUENCE')
-        ttl, sent = body.get('ttl_ms'),body.get('sent_at_ms')
-        if any(type(v) not in (float,int) or not math.isfinite(v) for v in (ttl,sent)) or not 0<ttl<=500:
+        ttl = number(body.get('ttl_ms'),'ttl_ms')
+        sent = number(body.get('sent_at_ms'),'sent_at_ms')
+        if not 0<ttl<=500:
             raise APIError(400,'时间戳/有效期无效','INVALID_ARGUMENT')
         age = time.time()*1000-sent
-        if age < -50: raise APIError(400,'客户端时钟超前','CLOCK_SKEW')
+        if age < -MAX_CLIENT_CLOCK_AHEAD_MS: raise APIError(400,'客户端时钟超前','CLOCK_SKEW')
         if age >= ttl: raise APIError(409,'集群请求已过期','EXPIRED_COMMAND')
         session['sequence'] = seq
-        return key,fingerprint,None
+        return key,fingerprint,None,history
 
     @staticmethod
     def _continuous(path,body):
@@ -236,19 +246,41 @@ class ClusterManager:
         return path=='/api/cluster/dispatch' and isinstance(rows,list) and bool(rows) and all(
             isinstance(r,dict) and is_continuous(r.get('path'),r.get('body')) for r in rows)
 
+    def _safety_batch(self, source, path, body):
+        rows = body.get('commands')
+        if path!='/api/cluster/dispatch' or not isinstance(rows,list) or not 0<len(rows)<=self.limits['max_controlled']:
+            return False
+        # 只有整批均为安全动作才使用独立回执空间。实际目标范围和每条报文仍由分发、成员执行器校验。
+        for row in rows:
+            if not isinstance(row,dict) or not isinstance(row.get('path'),str) or not isinstance(row.get('body'),dict):
+                return False
+            if row['path'] in SAFETY_PATHS:
+                continue
+            name = row.get('device_id')
+            entry = self.members.get(name) if isinstance(name,str) else None
+            if entry is None:
+                return False
+            policy = entry['service'].published_snapshot()[0]['control_config']['input_policy']
+            if not safety_action_path(row['path'],row['body'],source,policy):
+                return False
+        return True
+
     def request(self, source, path, body):
         with self.lock:
             try:
                 self._reconcile()
-                key, fingerprint, replay = self._envelope(source,path,body)
+                key, fingerprint, replay, history = self._envelope(source,path,body)
                 if replay is not None:
                     replay['idempotent_replay'] = True
                     return replay
                 if path!='/api/cluster/dispatch' and source!='app':
                     raise APIError(403,'集群管理与控制对象选择仅允许APP','OPERATOR_REQUIRED')
                 result = self._apply(source,path,body)
-                if not self._continuous(path,body):
-                    self.history[key] = dict(fingerprint=fingerprint,result=copy.deepcopy(result))
+                if history is not None:
+                    history[key] = dict(fingerprint=fingerprint,result=copy.deepcopy(result))
+                    if history is self.safety_history[source] and len(history)>CLUSTER_SAFETY_HISTORY_LIMIT:
+                        # 保存逐成员汇总结果，包括部分成功。重试原批次只回读，不能再执行已经成功的成员。
+                        del history[next(iter(history))]
                 self._audit('CLUSTER_REQUEST',request_id=body['request_id'],source=source,path=path,
                     selection_id=body.get('selection_id'),result_status=result.get('status','APPLIED'))
                 return result

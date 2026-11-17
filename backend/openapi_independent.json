@@ -642,6 +642,7 @@
     "/api/v1/devices/{device_id}/commands/{source}/{command_id}": {
       "get": {
         "summary": "统一命令回执查询",
+        "description": "查询当前来源会话的回执。普通离散记录在会话内保留，安全回执保留最近 64 条。滚动换出或会话替换后返回 COMMAND_NOT_FOUND。",
         "security": [
           {
             "sourceToken": []
@@ -772,7 +773,7 @@
     "/api/v1/devices/{device_id}/session": {
       "post": {
         "summary": "本机 session",
-        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "description": "仅设备绑定操纵凭据可写。响应 ack 提供服务接收和确认时刻。可传 client_sent_at_ms 检查校准后的时间戳；超出窗口返回 409 CLOCK_SYNC_REQUIRED，并保留现有会话。",
         "parameters": [
           {
             "name": "device_id",
@@ -1740,7 +1741,7 @@
     "/api/v1/devices/{device_id}/stop": {
       "post": {
         "summary": "本机 stop",
-        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "description": "普通离散历史满时仍接受合法停止。沿用设备绑定、会话、控制轮次、序号和 TTL 校验。",
         "parameters": [
           {
             "name": "device_id",
@@ -1880,7 +1881,7 @@
     "/api/v1/devices/{device_id}/protect": {
       "post": {
         "summary": "本机 protect",
-        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "description": "普通离散历史满时仍接受合法保护。沿用设备绑定、会话、序号和 TTL 校验。",
         "parameters": [
           {
             "name": "device_id",
@@ -2300,7 +2301,7 @@
     "/api/v1/devices/{device_id}/disconnect": {
       "post": {
         "summary": "本机 disconnect",
-        "description": "仅设备绑定操纵凭据可写。除session外沿用原0.5参数与校验；详见前端对接文档。只读403，跨设备403。",
+        "description": "普通离散历史满时仍接受合法断连。沿用设备绑定、会话、控制轮次、序号、TTL 和断连原因校验。",
         "parameters": [
           {
             "name": "device_id",
@@ -3908,6 +3909,11 @@
               "control_epoch": {
                 "type": "string"
               },
+              "epoch_reason": {
+                "type": "string",
+                "nullable": true,
+                "description": "推进该控制轮次的原因，在同一个 epoch 内保持稳定"
+              },
               "lease_required": {
                 "type": "boolean"
               },
@@ -4152,7 +4158,26 @@
           },
           "control_policy": {
             "type": "object"
+          },
+          "link_policy": {
+            "$ref": "#/components/schemas/LinkPolicy"
           }
+        }
+      },
+      "LinkPolicy": {
+        "type": "object",
+        "description": "独立模式的运行参数。recommended 字段为建议客户端设置的预算。",
+        "properties": {
+          "state_stream_target_hz": {"type": "integer", "example": 25},
+          "member_state_stale_after_ms": {"type": "number", "example": 500, "description": "服务将成员判为失联的快照年龄"},
+          "sse_idle_heartbeat_ms": {"type": "integer", "example": 1000, "description": "空闲注释心跳间隔，注释不续期状态"},
+          "sse_replay_frames": {"type": "integer", "example": 50},
+          "focus_peer_target_hz": {"type": "integer", "example": 10},
+          "state_publisher_timeout_ms": {"type": "integer", "example": 1000},
+          "recommended_sse_read_timeout_ms": {"type": "integer", "example": 3000},
+          "recommended_sse_first_frame_timeout_ms": {"type": "integer", "example": 3000},
+          "input_ttl_max_ms": {"type": "integer", "example": 500, "description": "协议上限，逐机当前 TTL 见设备目录"},
+          "max_client_clock_ahead_ms": {"type": "integer", "example": 50}
         }
       },
       "Directory": {
@@ -4197,7 +4222,18 @@
                   "thread_alive": {"type": "boolean"},
                   "reason": {"type": "string", "nullable": true, "description": "STATE_PUBLISHER_FAILED、STATE_PUBLISHER_STALLED 或 STATE_PUBLISHER_STOPPED"},
                   "progress_age_ms": {"type": "number"},
-                  "progress_timeout_ms": {"type": "number"}
+                  "progress_timeout_ms": {"type": "number"},
+                  "cadence": {
+                    "type": "object",
+                    "description": "最近共享状态帧的后端采样间隔。空闲心跳、客户端网络及 UI 刷新不参与统计。",
+                    "properties": {
+                      "target_hz": {"type": "integer"},
+                      "samples": {"type": "integer", "minimum": 0},
+                      "capture_gap_p95_ms": {"type": "number", "nullable": true},
+                      "capture_gap_max_ms": {"type": "number", "nullable": true},
+                      "latest_frame_age_ms": {"type": "number", "nullable": true}
+                    }
+                  }
                 }
               }
             }
@@ -4223,11 +4259,25 @@
             "type": "string"
           },
           "error_detail": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "timing": {"$ref": "#/components/schemas/TimingDiagnostic"}
+            }
           },
           "request_id": {
             "type": "string"
           }
+        }
+      },
+      "TimingDiagnostic": {
+        "type": "object",
+        "properties": {
+          "reason": {"type": "string", "enum": ["CLIENT_TIME_AHEAD", "EXPIRED_AT_RECEIPT", "EXPIRED_WHILE_QUEUED", "VOICE_DURATION_ELAPSED"]},
+          "server_received_at_ms": {"type": "number", "description": "服务接收时间，Unix 毫秒"},
+          "observed_age_ms": {"type": "number", "description": "接收时刻减报文时间戳，含时钟偏差和网络耗时"},
+          "queue_age_ms": {"type": "number", "description": "服务接收到时间校验的单调时钟耗时"},
+          "ttl_ms": {"type": "number"},
+          "max_client_clock_ahead_ms": {"type": "integer"}
         }
       },
       "MemberEnvelope": {
@@ -4260,7 +4310,7 @@
           },
           "sent_at_ms": {
             "type": "number",
-            "description": "当前Unix毫秒"
+            "description": "指令生成时刻，按服务端时钟校准后的 Unix 毫秒"
           },
           "ttl_ms": {
             "type": "number",
@@ -4289,6 +4339,10 @@
             "enum": [
               true
             ]
+          },
+          "client_sent_at_ms": {
+            "type": "number",
+            "description": "可选的会话申请时间戳，按服务端时钟校准后的 Unix 毫秒"
           }
         }
       },
@@ -4308,8 +4362,16 @@
           "control_epoch": {
             "type": "string"
           },
+          "control_epoch_reason": {
+            "type": "string",
+            "description": "推进当前控制轮次的原因"
+          },
           "ack": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "server_received_at_ms": {"type": "number", "description": "服务接收时刻，Unix 毫秒"},
+              "confirmed_at_ms": {"type": "number", "description": "服务确认时刻，Unix 毫秒"}
+            }
           },
           "command_status": {
             "type": "string"

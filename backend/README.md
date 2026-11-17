@@ -1,13 +1,13 @@
 # 后端工程 · v0.9.0
 
-负责人 A 的当前 Python 后端。对应仓库另一侧的 [Android 前端](../VrxFusionRemote/)；协作说明见 [docs](../docs/README.md)。
+负责人 A 的当前 Python 后端。对应的前端代码和协作说明可从仓库读取。[Android 前端](https://github.com/czy2024333-spec/AppRemoteControlProject/tree/4dd149a6bd6b541fe7b5b16292180688affc4735/VrxFusionRemote) · [协作说明](https://github.com/czy2024333-spec/AppRemoteControlProject/blob/4dd149a6bd6b541fe7b5b16292180688affc4735/docs/README.md)
 
 ## 先运行这一个入口
 
 VS Code 打开本目录，选择已安装依赖的 Python 解释器。新环境先执行 `python -m pip install -r core/requirements.txt`，固定 RotorPy 3.0.0；完整依赖锁见 core/requirements-lock.txt。
 
 ```powershell
-python run_backend.py --doctor
+python run_backend.py --mode independent --host 0.0.0.0 --doctor
 python run_backend.py --mode independent --host 0.0.0.0 --port 8765
 ```
 
@@ -37,9 +37,11 @@ python run_backend.py --mode independent --host 0.0.0.0 --port 8765
 ## 对接文档
 
 - [当前后端架构逻辑与复测](后端架构逻辑说明.md) · [HUD 优化实施记录](后端HUD优化实施记录.md)
+- [运行环境自检](后端运行环境自检.md) · [链路活性契约](后端链路活性契约.md) · [第三轮安全命令自检](后端第三轮自检_安全命令历史.md)
+- [后端优化清单自检进度](后端优化清单自检进度.md) · [第四轮自检](后端第四轮自检.md)
 - [当前三机接口](前端对接_三机独立操控.md) · [OpenAPI](openapi_independent.json)
 - [完整运行、Token 与测试说明](README_v0.9.md)
-- [原交付验证报告](验证报告_v0.9.md) · [协作仓库验证摘要](../docs/validation/README.md)
+- [原交付验证报告](验证报告_v0.9.md) · [协作仓库验证摘要](https://github.com/czy2024333-spec/AppRemoteControlProject/blob/4dd149a6bd6b541fe7b5b16292180688affc4735/docs/validation/README.md)
 
 原交付报告中引用的 `results/` 是本地运行证据目录，GitHub 不提交运行日志；历史精简摘要在 docs/validation。`契约样例_v0.9/` 保留来自实际联调的状态数据，不是新的验收结果。
 

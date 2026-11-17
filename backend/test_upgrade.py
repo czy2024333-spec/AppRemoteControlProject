@@ -2,6 +2,7 @@
 import copy
 import http.client
 import json
+import tempfile
 import threading
 import time
 import unittest
@@ -18,6 +19,96 @@ from cluster_client import ClusterClient
 from config_validation import validate_cluster_config
 from http_transport import strict_loads, validate_origins
 from acceptance_report import report
+import run_backend
+from runtime_info import (COMMAND_HISTORY_LIMIT, DEMO_INDEPENDENT_TOKENS, INDEPENDENT_AUDIT_FILENAME,
+    SAFETY_COMMAND_HISTORY_LIMIT)
+
+
+class DoctorTests(unittest.TestCase):
+    def test_old_python_stops_before_sleep_and_dependency_checks(self):
+        with patch.object(run_backend.sys,'version_info',(3,10,9)), \
+                patch.object(run_backend,'short_sleep_probe') as probe, \
+                patch.object(run_backend.importlib,'import_module') as load:
+            result = run_backend.diagnose('single')
+        self.assertFalse(result['healthy'])
+        self.assertEqual(result['checks'][0]['minimum_version'],'3.11')
+        probe.assert_not_called()
+        load.assert_not_called()
+
+    def test_short_sleep_probe_reports_the_observed_median(self):
+        readings = []
+        for index in range(run_backend.SLEEP_SAMPLES):
+            start = index*10_000_000
+            readings.extend((start,start+index*100_000+2_000_000))
+        with patch.object(run_backend.time,'perf_counter_ns',side_effect=readings), \
+                patch.object(run_backend.time,'sleep') as sleep:
+            result = run_backend.short_sleep_probe()
+        self.assertEqual(result['samples'],31)
+        self.assertAlmostEqual(result['median_ms'],3.5)
+        self.assertEqual(sleep.call_count,31)
+        sleep.assert_called_with(.002)
+
+    def test_slow_sleep_is_an_advisory_warning(self):
+        slow = dict(item='short_sleep',ok=True,median_ms=8.)
+        with patch.object(run_backend,'short_sleep_probe',return_value=slow):
+            result = run_backend.diagnose('single')
+        self.assertTrue(result['healthy'])
+        self.assertIn('SLEEP_LATENCY_HIGH',{row['code'] for row in result['warnings']})
+
+    def test_public_tokens_warn_on_all_interfaces_without_leaking_values(self):
+        self.assertEqual(DEMO_INDEPENDENT_TOKENS,{row['token'] for row in
+            json.loads(Path('independent_credentials.json').read_text('utf-8'))['credentials']})
+        exposed = run_backend.diagnose(host='0.0.0.0')
+        warning = next(row for row in exposed['warnings'] if row['code']=='PUBLIC_TOKENS_ON_ALL_INTERFACES')
+        self.assertTrue(exposed['healthy'])
+        self.assertEqual(warning['public_sample_token_count'],4)
+        self.assertEqual(exposed['command_history']['per_source_session_limit'],COMMAND_HISTORY_LIMIT)
+        self.assertEqual(exposed['command_history']['safety_per_source_session_limit'],SAFETY_COMMAND_HISTORY_LIMIT)
+        self.assertFalse(any(token in json.dumps(exposed) for token in DEMO_INDEPENDENT_TOKENS))
+        local = run_backend.diagnose(host='127.0.0.1')
+        self.assertNotIn(warning['code'],{row['code'] for row in local['warnings']})
+
+    def test_custom_file_warns_only_for_public_tokens_actually_used(self):
+        base = Path('results/upgrade_tests').resolve()
+        base.mkdir(parents=True,exist_ok=True)
+        value = json.loads(Path('independent_credentials.json').read_text('utf-8'))
+        with tempfile.TemporaryDirectory(dir=base) as folder:
+            directory = Path(folder).resolve()
+            self.assertTrue(directory.is_relative_to(base))
+            path = directory/'credentials.json'
+            for row in value['credentials'][:-1]:
+                row['token'] = uuid.uuid4().hex
+            path.write_text(json.dumps(value),encoding='utf-8')
+            mixed = run_backend.diagnose(credentials_path=path,host='0.0.0.0')
+            warning = next(row for row in mixed['warnings'] if row['code']=='PUBLIC_TOKENS_ON_ALL_INTERFACES')
+            self.assertEqual(warning['public_sample_token_count'],1)
+            value['credentials'][-1]['token'] = uuid.uuid4().hex
+            path.write_text(json.dumps(value),encoding='utf-8')
+            private = run_backend.diagnose(credentials_path=path,host='0.0.0.0')
+            self.assertTrue(private['healthy'])
+            self.assertNotIn(warning['code'],{row['code'] for row in private['warnings']})
+            self.assertFalse(any(row['token'] in json.dumps(private) for row in value['credentials']))
+
+    def test_audit_storage_probe_reads_existing_size_and_leaves_new_path_uncreated(self):
+        base = Path('results/upgrade_tests').resolve()
+        base.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as folder:
+            directory = Path(folder).resolve()
+            self.assertTrue(directory.is_relative_to(base))
+            future = directory/'nested'/'new-run'
+            result = run_backend.diagnose(results_path=future)['audit_storage']
+            self.assertTrue(result['probe_ok'])
+            self.assertEqual(result['audit_path'],str(future/INDEPENDENT_AUDIT_FILENAME))
+            self.assertEqual(result['existing_audit_bytes'],0)
+            self.assertFalse(future.exists())
+            existing = directory/INDEPENDENT_AUDIT_FILENAME
+            existing.write_bytes(b'{"sample":true}\n')
+            self.assertEqual(run_backend.audit_storage(directory)['existing_audit_bytes'],existing.stat().st_size)
+
+    def test_legacy_launch_token_overrides_are_checked(self):
+        result = run_backend.diagnose('single',source_tokens={'app':'too-short'})
+        self.assertFalse(result['healthy'])
+        self.assertEqual(result['checks'][-1]['item'],'configuration')
 
 
 class UpgradePureTests(unittest.TestCase):

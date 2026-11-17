@@ -103,6 +103,7 @@
     "selected_source": "APP",
     "pending_source": null,
     "control_epoch": "fixture-epoch",
+    "epoch_reason": "USER_SWITCH_TO_app",
     "phase": "SOURCE_SELECTED",
     "has_control": null,
     "lease_required": true,

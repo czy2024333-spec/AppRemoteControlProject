@@ -238,6 +238,7 @@
     "/api/cluster/dispatch": {
       "post": {
         "summary": "dispatch",
+        "description": "纯安全批次在 2048 条普通历史达到上限时仍可分发。每来源集群会话滚动保留最近 64 个纯安全批次，仍校验完整成员集合、选择、会话、序号和 TTL。",
         "requestBody": {
           "required": true,
           "content": {
@@ -260,6 +261,9 @@
           },
           "409": {
             "description": "过期、冲突、失联或旧选择"
+          },
+          "503": {
+            "description": "普通离散请求历史已满（HISTORY_FULL）。成员入队失败时查看 200 响应内的逐成员错误。"
           },
           "501": {
             "description": "协同算法未实现"

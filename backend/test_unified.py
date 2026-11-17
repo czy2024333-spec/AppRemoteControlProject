@@ -19,6 +19,7 @@ from unified_contract import KNOWN_ERROR_CODES, device_state, receipt, error_det
 def hud_fixture_frames():
     raw = dict(device_id='sim-drone-1',boot_id='fixture-boot',sequence=500,server_time_ms=1700000000000,
         simulation_time_s=10.,state_age_ms=8.,online=True,mode='HOLD',control_epoch='fixture-epoch',
+        control_epoch_reason='USER_SWITCH_TO_app',
         position_m=[2.01,.02,1.],velocity_m_s=[0.,0.,0.],quaternion_xyzw=[0.,0.,0.,1.],
         angular_velocity_body_rad_s=[0.,0.,0.],sensor_rate_hz=20,selected_source='app',
         target_yaw_rad=.1,environment={'wind_m_s':[0.,0.,0.]},
@@ -31,6 +32,7 @@ def hud_fixture_frames():
         invalid=dict(velocity_m_s=[float('nan'),0.,0.]),
         sensor_stale=dict(sensor_measurement=dict(raw['sensor_measurement'],simulation_time_s=6.8)),
         recovering=dict(mode='PROTECTED',protection_reason='ALTITUDE_STATE_LIMIT',selected_source=None,
+            control_epoch_reason='ALTITUDE_STATE_LIMIT',
             boundary_recovery=dict(required=True,can_resume=False,blockers=['SPEED'],
                 min_resume_altitude_m=.35,max_resume_altitude_m=9.95,
                 max_resume_horizontal_radius_m=9.95,max_resume_speed_m_s=.05)),
@@ -74,6 +76,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(frames['sensor_stale']['sensors']['local_position_velocity']['reason'],'SAMPLE_TOO_OLD')
         self.assertEqual(frames['recovering']['protection']['recovery']['blockers'],['SPEED'])
         self.assertTrue(frames['online']['control']['active'])
+        self.assertEqual(frames['online']['control']['epoch_reason'],'USER_SWITCH_TO_app')
+        self.assertEqual(frames['recovering']['control']['epoch_reason'],'ALTITUDE_STATE_LIMIT')
         self.assertTrue(frames['waiting_neutral']['control']['awaiting_neutral'])
 
 

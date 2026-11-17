@@ -108,6 +108,7 @@
     "selected_source": null,
     "pending_source": null,
     "control_epoch": "fixture-epoch",
+    "epoch_reason": "ALTITUDE_STATE_LIMIT",
     "phase": "PROTECTED",
     "has_control": null,
     "lease_required": true,

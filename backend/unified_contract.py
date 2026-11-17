@@ -5,7 +5,7 @@ from runtime_info import IMPLEMENTATION_VERSION, UNIFIED_PROTOCOL_VERSION
 
 COORDINATE_FRAME='SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP'
 KNOWN_ERROR_CODES = frozenset("""
-    ACK_TIMEOUT BARRIER_FAILED BOUNDARY_RECOVERY_PENDING CAPACITY_LIMIT CLOCK_SKEW
+    ACK_TIMEOUT BARRIER_FAILED BOUNDARY_RECOVERY_PENDING CAPACITY_LIMIT CLOCK_SKEW CLOCK_SYNC_REQUIRED
     COMMAND_HISTORY_FULL COMMAND_ID_REUSED COMMAND_NOT_FOUND CONFIG_SAVE_FAILED CONFIG_VERSION_CONFLICT
     CONFIRMATION_REQUIRED CORE_REJECTED CORS_HEADERS_NOT_ALLOWED CORS_METHOD_NOT_ALLOWED
     DEPLOYMENT_MODE_MISMATCH DEVICE_ID_REUSED DISCONNECTED GROUP_NOT_FOUND HISTORY_FULL INVALID_CONFIG
@@ -102,6 +102,7 @@ def device_state(raw):
         control=dict(source=(raw.get('active_source') or '').upper() or None,
             selected_source=(raw.get('selected_source') or '').upper() or None,
             pending_source=(raw.get('pending_source') or '').upper() or None,control_epoch=raw['control_epoch'],
+            epoch_reason=raw.get('control_epoch_reason'),
             phase='PROTECTED' if raw['mode']=='PROTECTED' else 'WAITING_NEUTRAL' if raw.get('pending_source') else
                 'SOURCE_SELECTED' if raw.get('selected_source') else 'OBSERVING',
             has_control=None,lease_required=True,
@@ -153,7 +154,7 @@ def receipt(raw,device_id=None,command_id=None,source=None):
         confirmed_at_unix_ms=raw.get('ack',{}).get('confirmed_at_ms'))
 
 
-def error_detail(code,message,device_id=None,command_id=None):
+def error_detail(code,message,device_id=None,command_id=None,*,timing=None):
     if code=='UNAUTHORIZED': category='AUTH_REQUIRED'
     elif code in ('OPERATOR_REQUIRED','CAPABILITY_MISMATCH','SOURCE_DISABLED','ORIGIN_NOT_ALLOWED','READ_ONLY','DEVICE_FORBIDDEN'): category='FORBIDDEN'
     elif code in ('STALE_SELECTION','TARGET_MISMATCH'): category='TARGET_CHANGED'
@@ -169,6 +170,9 @@ def error_detail(code,message,device_id=None,command_id=None):
     elif code in KNOWN_ERROR_CODES: category=code
     else: category='UNKNOWN_ERROR'
     retry={'OUTCOME_UNKNOWN':'QUERY_SAME_COMMAND_ID','SERVICE_DEGRADED':'RETRY_LATER'}
-    return dict(code=category,message_key='backend.'+category.lower(),message=message,raw_code=code,
+    detail = dict(code=category,message_key='backend.'+category.lower(),message=message,raw_code=code,
         retry_policy=retry.get(category,'USER_ACTION_REQUIRED'),
         device_id=device_id,command_id=command_id)
+    if timing is not None:
+        detail['timing'] = timing
+    return detail

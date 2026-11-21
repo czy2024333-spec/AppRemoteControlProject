@@ -1096,6 +1096,107 @@
                     "nullable": true
                   }
                 }
+              },
+              "gnss_local_position": {
+                "type": "object",
+                "description": "启用GNSS误差仿真时提供米制局部坐标及样本年龄。",
+                "required": [
+                  "value",
+                  "source",
+                  "validity",
+                  "unit",
+                  "coordinate_frame",
+                  "age_ms",
+                  "reason"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "object",
+                    "nullable": true,
+                    "required": [
+                      "sequence",
+                      "simulation_time_s",
+                      "measured_at_unix_ms",
+                      "delivered_at_simulation_time_s",
+                      "position_m"
+                    ],
+                    "properties": {
+                      "sequence": {
+                        "type": "integer"
+                      },
+                      "simulation_time_s": {
+                        "type": "number"
+                      },
+                      "measured_at_unix_ms": {
+                        "type": "number"
+                      },
+                      "delivered_at_simulation_time_s": {
+                        "type": "number"
+                      },
+                      "position_m": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "SIM_GNSS"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "m"
+                    ]
+                  },
+                  "coordinate_frame": {
+                    "type": "string",
+                    "enum": [
+                      "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP"
+                    ]
+                  },
+                  "validity": {
+                    "type": "string",
+                    "enum": [
+                      "VALID",
+                      "STALE",
+                      "INVALID",
+                      "NOT_CONNECTED"
+                    ]
+                  },
+                  "age_ms": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stale_after_ms": {
+                    "type": "number"
+                  },
+                  "latency_ms": {
+                    "type": "number"
+                  },
+                  "rate_hz": {
+                    "type": "integer"
+                  },
+                  "packet_sequence": {
+                    "type": "integer"
+                  },
+                  "lost_packets": {
+                    "type": "integer"
+                  },
+                  "pending_samples": {
+                    "type": "integer"
+                  }
+                }
               }
             }
           },

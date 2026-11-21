@@ -8,6 +8,7 @@ from app_server import SimulationService
 from runtime_info import CLUSTER_BARRIER_PATH, IMPLEMENTATION_VERSION, identifier
 from simulation_core import SimulationCore
 from control_config import DEFAULT, update as update_control, validate as validate_control
+from gnss import LocalGnssSimulator, validate_gnss_config
 
 
 def validate_member(spec):
@@ -43,10 +44,14 @@ def validate_member(spec):
 
 
 class ManagedMember(SimulationService):
-    def __init__(self, spec, cluster_id, tokens, directory, audit_sink=None):
+    def __init__(self, spec, cluster_id, tokens, directory, audit_sink=None, gnss_config=None):
         self.spec, control = validate_member(spec)
         self.cluster_id = cluster_id
         self.rng = np.random.default_rng(spec['sensors']['seed'])
+        gnss_settings = validate_gnss_config({} if gnss_config is None else gnss_config)
+        # 服从该成员的传感器启用设置和既有实例容量管理。
+        gnss_settings['enabled'] = gnss_settings['enabled'] and self.spec['sensors']['enabled']
+        self.gnss = LocalGnssSimulator(gnss_settings,seed=spec['sensors']['seed'])
         self.measurement = None
         self.next_measurement_s = 0.
         self.sensor_sequence = 0
@@ -89,6 +94,8 @@ class ManagedMember(SimulationService):
         if self._instance_config_version != self.config_version:
             config = copy.deepcopy(self.spec)
             config['control'] = copy.deepcopy(self.config)
+            if self.gnss.config['enabled']:
+                config['gnss'] = copy.deepcopy(self.gnss.config)
             self._instance_config = config
             self._instance_config_version = self.config_version
         state = super().build_state(raw)
@@ -96,6 +103,9 @@ class ManagedMember(SimulationService):
             member_boot_id=self.boot_id, device_id=self.spec['device_id'], sensor_measurement=self.measurement,
             sensor_rate_hz=sensor['rate_hz'], control_config_origin=self.control_config_origin,
             instance_config=self._instance_config, state_stream_target_hz=self.spec['state']['stream_hz'])
+        if self.gnss.config['enabled']:
+            state['gnss_local_measurement'] = self.gnss.update(
+                raw['state']['x'],sim_time,state['server_time_ms'])
         return state
 
     def execute(self, item):

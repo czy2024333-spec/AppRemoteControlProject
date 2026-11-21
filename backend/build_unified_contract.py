@@ -23,6 +23,20 @@ def add_hud_state_fields(state):
         fields[name]['properties'].update(freshness)
     fields['sensors'].setdefault('properties',{})['local_position_velocity'] = dict(
         type='object',properties=dict(**freshness,stale_after_ms=dict(type='integer',nullable=True)))
+    fields['sensors']['properties']['gnss_local_position'] = dict(
+        type='object',description='启用GNSS误差仿真时提供米制局部坐标及样本年龄。',
+        required=['value','source','validity','unit','coordinate_frame','age_ms','reason'],
+        properties=dict(
+            value=dict(type='object',nullable=True,required=['sequence','simulation_time_s',
+                'measured_at_unix_ms','delivered_at_simulation_time_s','position_m'],
+                properties=dict(sequence=dict(type='integer'),simulation_time_s=dict(type='number'),
+                    measured_at_unix_ms=dict(type='number'),delivered_at_simulation_time_s=dict(type='number'),
+                    position_m=dict(type='array',minItems=3,maxItems=3,items=dict(type='number')))),
+            source=dict(type='string',enum=['SIM_GNSS']),unit=dict(type='string',enum=['m']),
+            coordinate_frame=dict(type='string',enum=['SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP']),
+            validity=dict(type='string',enum=['VALID','STALE','INVALID','NOT_CONNECTED']),**freshness,
+            stale_after_ms=dict(type='number'),latency_ms=dict(type='number'),rate_hz=dict(type='integer'),
+            packet_sequence=dict(type='integer'),lost_packets=dict(type='integer'),pending_samples=dict(type='integer')))
     fields['control']['properties'].update(active=dict(type='boolean'),awaiting_neutral=dict(type='boolean'),
         epoch_reason=dict(type='string',nullable=True,description='推进该控制轮次的原因'),
         last_applied=dict(type='object',nullable=True,properties=dict(control_epoch=dict(type='string'),

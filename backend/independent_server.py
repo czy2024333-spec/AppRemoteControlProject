@@ -91,6 +91,7 @@ class StateFeed:
                     next_capture = now + capture_period
                     aligned_origins = None
                 states = [self.fleet.member_state(name, copy_state=False) for name in member_ids]
+                self.fleet.record_replay(states,now)
                 signature = tuple((s['boot_id'],s['sequence'],s['server_time_ms'],s['online'],
                     s['mode'],s['control_epoch'],s['selected_source'],s['pending_source'],s['last_applied']) for s in states)
                 signature = (signature, self.fleet.audit.failure)
@@ -183,7 +184,7 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
         def log_message(self, *args):
             pass
 
-        def stream(self, identity, name=None, legacy=False, focus=None):
+        def stream(self, identity, name=None, legacy=False, focus=None, ue=False):
             if name is not None:
                 fleet.member_state(name, copy_state=False)
             if focus is not None:
@@ -191,7 +192,10 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
             feed = self.server.state_feed
             if not feed.status()['healthy']:
                 raise APIError(503,'共享状态发布不可用，可通过状态快照检查','STATE_PUBLISHER_UNAVAILABLE')
+            # UE 与 APP 的帧结构不同，续传游标也按视图区分，避免跨端点错用。
             prefix = f"{fleet.boot_id}/{name or 'fleet'}/{focus or '-'}/{int(legacy)}:"
+            if ue:
+                prefix = f"{fleet.boot_id}/ue/fleet/-/0:"
             last_id = self.headers.get('Last-Event-ID')
             replay = bool(last_id)
             cursor = None
@@ -221,7 +225,9 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                     if resync:
                         self.wfile.write(b': resync\n\n')
                     for frame in frames:
-                        if name is None:
+                        if ue:
+                            data = fleet.ue_snapshot(frame.raw_members)
+                        elif name is None:
                             data = fleet.state_for_identity(frame.state, identity)
                             if focus is not None:
                                 include_peers = next_peers is None or frame.captured_at >= next_peers
@@ -251,9 +257,10 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
             except (OSError,APIError):
                 pass
 
-        def export_logs(self, identity, query):
+        def export_logs(self, identity, query, replay=False):
             # 先完成有界快照文件，再发200；失败不会留下“成功但0字节”的下载。
-            with fleet.logs_export(identity,query) as export:
+            export_factory = fleet.replay_export if replay else fleet.logs_export
+            with export_factory(identity,query) as export:
                 self.send_response(200)
                 self.send_header('Content-Type',
                     'text/csv; charset=utf-8' if export['format']=='csv' else 'application/x-ndjson; charset=utf-8')
@@ -263,6 +270,8 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 self.send_header('X-Log-Snapshot',export['snapshot'])
                 self.send_header('X-Log-Rows',str(export['total']))
                 self.send_header('X-Log-Pending-Tail',str(export['pending_tail']))
+                if replay:
+                    self.send_header('X-Replay-Schema',export['replay_schema'])
                 if self.close_connection:
                     self.send_header('Connection','close')
                 self.end_headers()
@@ -310,6 +319,14 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                 elif not post and path == '/api/v1/logs':
                     query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
                     data = fleet.logs(identity,query)
+                elif not post and path == '/api/v1/ue/events':
+                    return self.stream(identity,ue=True)
+                elif not post and path == '/api/v1/replay/frames':
+                    query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
+                    data = fleet.replay_frames(identity,query)
+                elif not post and path == '/api/v1/replay/export':
+                    query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
+                    return self.export_logs(identity,query,replay=True)
                 elif not post and path == '/api/v1/logs/export':
                     query = {k:v[0] for k,v in parse_qs(urlsplit(self.path).query).items()}
                     return self.export_logs(identity,query)
@@ -405,7 +422,7 @@ def main():
             server.server_close()
     finally:
         if not fleet.close():
-            print('审计关闭时未完全排空，请保留运行目录并检查 health/audit。',flush=True)
+            print('运行数据未完全保存，请保留运行目录并检查 health/audit 和 health/replay。',flush=True)
 
 
 if __name__=='__main__':

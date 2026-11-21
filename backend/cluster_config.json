@@ -87,6 +87,15 @@
       }
     }
   ],
+  "gnss": {
+    "enabled": false,
+    "rate_hz": 20,
+    "noise_std_m": 0.8,
+    "drift_m_per_s": [0.02, 0.0, 0.0],
+    "latency_ms": 80,
+    "loss_probability": 0.0,
+    "stale_after_ms": 500
+  },
   "groups": {
     "alpha": [
       "sim-drone-1",

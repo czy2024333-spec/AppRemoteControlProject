@@ -12,7 +12,7 @@ KNOWN_ERROR_CODES = frozenset("""
     INVALID_MEMBERS LOG_BUSY LOG_DATA_CORRUPT LOG_EXPORT_TOO_LARGE LOG_INDEX_BUILDING
     LOG_INDEX_UNAVAILABLE LOG_QUERY_TIMEOUT LOG_READ_FAILED LOG_SNAPSHOT_EXPIRED MEMBER_NOT_FOUND
     MODE_NOT_ALLOWED NOT_FOUND NO_PENDING_CONFIRMATION PROTECTED QUEUE_FULL REQUEST_ID_REUSED
-    REQUEST_REJECTED RETIRED_INPUT SENSOR_CAPACITY_LIMIT STALE_CLUSTER_SEQUENCE STALE_DEVICE_EVENT
+    REQUEST_REJECTED REPLAY_RECORDING_FAILED RETIRED_INPUT SENSOR_CAPACITY_LIMIT STALE_CLUSTER_SEQUENCE STALE_DEVICE_EVENT
     STALE_SEQUENCE TARGET_DISCONNECTED TASK_NOT_SUPPORTED USER_ACTION_REQUIRED WRONG_CLUSTER WRONG_DEVICE
 """.split())
 
@@ -60,6 +60,32 @@ def sensor_channel(raw, online):
         age_ms=round(age,1),stale_after_ms=threshold,reason=reason)
 
 
+def gnss_local_channel(raw, online):
+    info = raw['gnss_local_measurement']
+    sample = info['sample']
+    age = None
+    if sample is not None:
+        # 统计真实采样年龄，延迟交付和成员停更都会增加年龄。
+        age = max(0.,(raw['simulation_time_s']-sample['simulation_time_s'])*1000)
+        age += max(0.,raw.get('state_age_ms') or 0.)
+    if not online:
+        validity,reason = ('STALE' if sample is not None else 'NOT_CONNECTED'),raw.get('loss_reason') or 'LINK_LOST'
+    elif info['last_packet_lost']:
+        validity,reason = ('STALE' if sample is not None else 'INVALID'),'SIMULATED_PACKET_LOSS'
+    elif sample is None:
+        validity,reason = 'NOT_CONNECTED','WAITING_DELAYED_SAMPLE'
+    # 仿真秒换算为毫秒会产生浮点尾差，恰好达到有效期的样本仍在有效范围内。
+    elif age > info['stale_after_ms'] + 1e-6:
+        validity,reason = 'STALE','SAMPLE_TOO_OLD'
+    else:
+        validity,reason = 'VALID',None
+    return measurement(copy.deepcopy(sample),'m','SIM_GNSS',validity,
+        coordinate_frame=COORDINATE_FRAME,age_ms=round(age,1) if age is not None else None,
+        reason=reason,stale_after_ms=info['stale_after_ms'],latency_ms=info['latency_ms'],
+        rate_hz=info['rate_hz'],packet_sequence=info['packet_sequence'],
+        lost_packets=info['lost_packets'],pending_samples=info['pending_samples'])
+
+
 def device_descriptor(raw):
     sensor=raw.get('instance_config',{}).get('sensors',{})
     return dict(device_id=raw['device_id'],name=raw['device_id'],kind='MULTIROTOR',reality='SIMULATION',
@@ -68,7 +94,8 @@ def device_descriptor(raw):
         capabilities=dict(motion=True,motion_axes=['X','Y','Z','YAW'],motion_frames=['WORLD','HEADING'],
             default_motion_frame='WORLD',normalized_input=True,velocity_setpoint=True,
             actions=['STOP','PROTECT','RESUME','HOVER'],takeoff=False,land=False,return_home=False,
-            battery=False,gnss=False,local_position_velocity_measurement=sensor.get('enabled',False),
+            battery=False,gnss=False,gnss_local_simulation=raw.get('gnss_local_measurement') is not None,
+            local_position_velocity_measurement=sensor.get('enabled',False),
             autonomous_tasks=False,ue_video=False,hardware_ring_verified=False,hardware_voice_verified=False),
         control_limits={k:raw['control_config'][k] for k in ('sensitivity','deadzone','max_horizontal_speed_m_s',
             'max_vertical_speed_m_s','max_yaw_rate_rad_s','input_ttl_ms')}
@@ -87,6 +114,8 @@ def device_state(raw):
     if raw.get('protection_reason'): alarms.append(dict(code=raw['protection_reason'],level='DANGER'))
     if not online: alarms.append(dict(code=raw.get('loss_reason') or 'LINK_LOST',level='DANGER'))
     sensors=dict(local_position_velocity=sensor_channel(raw,online))
+    if raw.get('gnss_local_measurement') is not None:
+        sensors['gnss_local_position'] = gnss_local_channel(raw,online)
     freshness=dict(age_ms=raw.get('state_age_ms'),loss_reason=raw.get('loss_reason'))
     return dict(contract_version=UNIFIED_PROTOCOL_VERSION,device_id=raw['device_id'],boot_id=raw['boot_id'],
         sequence=raw['sequence'],server_time_unix_ms=raw['server_time_ms'],

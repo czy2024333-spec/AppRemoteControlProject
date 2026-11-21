@@ -99,7 +99,8 @@ class ClusterManager:
         enabled = sum(e['spec']['sensors']['enabled'] for e in self.members.values())
         if spec['sensors']['enabled'] and enabled>=self.limits['max_sensor_enabled']:
             raise APIError(409,'传感器启用数量已达到配置容量','SENSOR_CAPACITY_LIMIT')
-        service = ManagedMember(spec,self.cluster_id,self.tokens,self.directory/name)
+        service = ManagedMember(spec,self.cluster_id,self.tokens,self.directory/name,
+            gnss_config=self.config.get('gnss'))
         service.start()
         self.members[name] = dict(service=service, spec=spec, online=True, loss_reason=None)
         self.used_ids.add(name)

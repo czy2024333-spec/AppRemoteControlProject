@@ -1,6 +1,7 @@
 """三端各控一机、共享全机位置；没有全局单选控制对象或广播运动入口。"""
 import copy
 import hmac
+import logging
 from pathlib import Path
 import time
 import threading
@@ -15,6 +16,7 @@ from logs_query import LogIndex
 from runtime_info import (FOCUS_PEER_TARGET_HZ, IMPLEMENTATION_VERSION, INDEPENDENT_AUDIT_FILENAME,
     MAX_CLIENT_CLOCK_AHEAD_MS, SSE_IDLE_HEARTBEAT_MS, SSE_REPLAY_FRAMES, STATE_PUBLISHER_TIMEOUT_MS,
     STATE_STREAM_TARGET_HZ, identifier, is_continuous)
+from state_replay import REPLAY_SCHEMA, StateReplay
 from unified_contract import device_descriptor, device_state, snapshot
 
 def validate_credentials(value, device_ids):
@@ -79,10 +81,14 @@ class IndependentFleet:
         self.results_directory = Path(directory).resolve()
         self.audit = AsyncAudit(self.results_directory/INDEPENDENT_AUDIT_FILENAME)
         self.logs_index = LogIndex(self.results_directory,sorted(s['device_id'] for s in self.config['members']))
+        self.replay = None
         try:
+            self.replay = StateReplay(self.results_directory,
+                [s['device_id'] for s in self.config['members']],self.cluster_id,self.boot_id)
             for spec in self.config['members']:
                 name = spec['device_id']
-                service = IndependentMember(spec, self.cluster_id, DEMO_TOKENS, self.results_directory/name, self.audit)
+                service = IndependentMember(spec, self.cluster_id, DEMO_TOKENS, self.results_directory/name,
+                    self.audit,gnss_config=self.config.get('gnss'))
                 self.members[name] = service
                 service.state_changed = self.state_changed
                 service.start()
@@ -97,7 +103,9 @@ class IndependentFleet:
         for service in self.members.values():
             service.close()
         self.logs_index.close()
-        return self.audit.close()
+        replay_closed = self.replay.close() if self.replay is not None else True
+        audit_closed = self.audit.close()
+        return replay_closed and audit_closed
 
     def authenticate(self, header):
         for identity in self.identities:
@@ -137,6 +145,16 @@ class IndependentFleet:
     def state(self, identity):
         return self.state_for_identity(self.fleet_snapshot(), identity)
 
+    def record_replay(self, states, captured_at):
+        # 复用共享发布帧抽稀录制，每帧只采一次，与观察端数量无关。
+        try:
+            return self.replay.capture(states,captured_at)
+        except Exception:
+            # 回放异常对外可见，实时状态发布仍继续推进。
+            self.replay.failure = 'REPLAY_CAPTURE_FAILED'
+            logging.exception('回放采样异常，已停录')
+            return False
+
     def fleet_snapshot(self, states=None):
         # 成员快照独立读取；不等待其他飞机的命令或日志，也不触发控制会话。
         if states is None:
@@ -151,6 +169,14 @@ class IndependentFleet:
         audit = self.audit.status()
         data.update(audit=audit, link=dict(audit='OK' if audit['healthy'] else 'UNAVAILABLE'))
         return data
+
+    def ue_snapshot(self, raw_members):
+        # UE 使用平铺的米制三维状态，由其坐标转换器统一转为厘米。
+        members = [dict(raw_members[name]) for name in sorted(raw_members)]
+        return dict(cluster_id=self.cluster_id,boot_id=self.boot_id,
+            server_time_ms=time.time()*1000,selection=None,
+            registered_count=len(members),online_count=sum(m['online'] for m in members),
+            members=members)
 
     def state_for_identity(self, snapshot, identity):
         data = dict(snapshot)
@@ -178,11 +204,12 @@ class IndependentFleet:
         return dict(contract_version='1.0',implementation_version=IMPLEMENTATION_VERSION,deployment_mode='INDEPENDENT',
             cluster_id=self.cluster_id,authentication=dict(mode='DEVELOPMENT_DEVICE_BOUND_TOKEN',**identity),
             protocols=dict(unified_read='1.0',device_control='0.5',transport=['HTTP','SSE']),
-            self_device_id=identity['device_id'],
+            self_device_id=identity['device_id'],replay_schema=REPLAY_SCHEMA,
             writable_device_ids=[identity['device_id']] if identity['role']=='CONTROLLER' else [],
             capabilities=dict(independent_control=True,cluster_control=False,unified_intent_write=False,
                 device_bound_legacy_write=True,directory=True,unified_state=True,unified_receipts=True,
-                ue_video=False,formal_user_roles=False,logs_query=True,logs_export=True,
+                ue_video=False,ue_state_stream=True,formal_user_roles=False,logs_query=True,logs_export=True,
+                state_replay=True,replay_export=True,
                 hud_state_metadata=True,sse_comment_heartbeat=True,sse_resume=True,sse_focus=True,
                 state_publisher_health=True),
             control_policy=dict(default_frame='WORLD',axes_order=['X','Y','Z','YAW'],
@@ -199,6 +226,8 @@ class IndependentFleet:
                 input_ttl_max_ms=INPUT_TTL_MAX_MS, max_client_clock_ahead_ms=MAX_CLIENT_CLOCK_AHEAD_MS),
             routes=dict(devices='/api/v1/devices',state='/api/v1/state',events='/api/v1/events',
                 logs='/api/v1/logs',logs_export='/api/v1/logs/export',
+                replay_frames='/api/v1/replay/frames',replay_export='/api/v1/replay/export',
+                ue_events='/api/v1/ue/events',
                 control_prefix='/api/v1/devices/{device_id}'))
 
     def request(self, identity, name, path, body):
@@ -250,9 +279,17 @@ class IndependentFleet:
     def logs_export(self, identity, params):
         return self.logs_index.export(params,set(self.members))
 
+    def replay_frames(self, identity, params):
+        result = self.replay.query(params,set(self.members))
+        result.update(viewer=identity['client_id'],viewer_role=identity['role'])
+        return result
+
+    def replay_export(self, identity, params):
+        return self.replay.export(params,set(self.members))
+
     def health(self):
         members = [service.health() for service in self.members.values()]
         audit = self.audit.status()
         return dict(mode='independent',implementation_version=IMPLEMENTATION_VERSION,
             boot_id=self.boot_id,healthy=all(m['healthy'] for m in members) and audit['healthy'],members=members,audit=audit,
-            logs_index=self.logs_index.status())
+            logs_index=self.logs_index.status(),replay=self.replay.status())

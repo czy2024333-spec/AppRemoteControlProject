@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-21",
+  "scope": "本机回环；三机控制与状态推送，UE解析使用后端等价解析器",
+  "source_archive_sha256": "ac696ae749820c24478b31825f546e788cd8fae749bb966e017d29dafc789125",
+  "backend": {
+    "tests_run": 187,
+    "duration_s": 69.786,
+    "result": "OK"
+  },
+  "dynamics": {
+    "tests_run": 27,
+    "duration_s": 13.023,
+    "result": "OK (skipped=1)",
+    "passed": 26,
+    "skipped": 1,
+    "skip_reason": "test_lab.Day1Tests.test_finished_run_summaries 依赖已保存的历史实验产物"
+  },
+  "integrated_load": {
+    "passed": true,
+    "duration_s": 30,
+    "gnss_enabled": true,
+    "gnss_loss_probability": 0.1,
+    "control_ack_count": 1782,
+    "control_p95_ms": [
+      7.680099999561207,
+      7.359200000792043,
+      7.107199999154545
+    ],
+    "app_sse_hz": [
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0
+    ],
+    "extra_consumers": {
+      "ue_frames": 753,
+      "ue_members": 2259,
+      "ue_parse_failures": 0,
+      "errors": [],
+      "queries": 28,
+      "exports": [
+        {
+          "rows": 211,
+          "bytes": 215298
+        },
+        {
+          "rows": 423,
+          "bytes": 432248
+        },
+        {
+          "rows": 649,
+          "bytes": 663840
+        },
+        {
+          "rows": 868,
+          "bytes": 888551
+        }
+      ],
+      "ue_receive_hz": 25.000798645857543
+    },
+    "replay_frames": 301,
+    "replay_member_records": 903,
+    "replay_average_hz": 9.986738963028,
+    "replay_bytes": 991274,
+    "migration_records": 903
+  },
+  "gnss_sampling_comparison": {
+    "simulated_duration_s": 5,
+    "gnss_rate_hz": 20,
+    "seed": 101,
+    "baseline": {
+      "timing": {
+        "50": {
+          "samples": 101,
+          "interval_counts_ms": {
+            "60.0": 50,
+            "40.0": 50
+          },
+          "max_schedule_error_ms": 10
+        },
+        "55": {
+          "samples": 101,
+          "interval_counts_ms": {
+            "54.5455": 75,
+            "36.3636": 25
+          },
+          "max_schedule_error_ms": 13.636364
+        },
+        "100": {
+          "samples": 101,
+          "interval_counts_ms": {
+            "50.0": 100
+          },
+          "max_schedule_error_ms": 0
+        }
+      },
+      "acquisition_count": 101,
+      "noise_changes_loss_flags": 47,
+      "delivered": 64,
+      "loss_changes_delivered_positions": 62,
+      "exact_50_ms": {
+        "age_ms": 50,
+        "validity": "STALE",
+        "reason": "SAMPLE_TOO_OLD"
+      }
+    },
+    "optimized": {
+      "timing": {
+        "50": {
+          "samples": 101,
+          "interval_counts_ms": {
+            "50.0": 100
+          },
+          "max_schedule_error_ms": 0
+        },
+        "55": {
+          "samples": 101,
+          "interval_counts_ms": {
+            "50.0": 100
+          },
+          "max_schedule_error_ms": 0
+        },
+        "100": {
+          "samples": 101,
+          "interval_counts_ms": {
+            "50.0": 100
+          },
+          "max_schedule_error_ms": 0
+        }
+      },
+      "acquisition_count": 101,
+      "noise_changes_loss_flags": 0,
+      "delivered": 67,
+      "loss_changes_delivered_positions": 0,
+      "exact_50_ms": {
+        "age_ms": 50,
+        "validity": "VALID",
+        "reason": null
+      }
+    }
+  },
+  "gnss_20261120_load": {
+    "duration_s": 30,
+    "passed": true,
+    "gnss": {
+      "rate_hz": 20,
+      "latency_ms": 80,
+      "noise_std_m": 0.8,
+      "drift_m_per_s": [
+        0.02,
+        0,
+        0
+      ],
+      "loss_probability": 0.1
+    },
+    "control_ack_count": 1784,
+    "control_p95_ms": [
+      6.280199999764591,
+      6.022899999607034,
+      6.252500000300643
+    ],
+    "sse_rates_hz": [
+      24.966666666666665,
+      24.966666666666665,
+      24.966666666666665,
+      24.966666666666665,
+      24.966666666666665,
+      25.0,
+      24.966666666666665,
+      24.966666666666665
+    ],
+    "final_devices": [
+      {
+        "device_id": "sim-drone-1",
+        "sample_sequence": 601,
+        "lost_packets": 65,
+        "packet_sequence": 601,
+        "delay_ms": 80.0,
+        "age_ms": 104.4,
+        "validity": "VALID"
+      },
+      {
+        "device_id": "sim-drone-2",
+        "sample_sequence": 600,
+        "lost_packets": 42,
+        "packet_sequence": 601,
+        "delay_ms": 90.0,
+        "age_ms": 146.7,
+        "validity": "STALE"
+      },
+      {
+        "device_id": "sim-drone-3",
+        "sample_sequence": 601,
+        "lost_packets": 59,
+        "packet_sequence": 601,
+        "delay_ms": 80.0,
+        "age_ms": 88.6,
+        "validity": "VALID"
+      }
+    ]
+  },
+  "gnss_20261120_regression": {
+    "first": {
+      "tests_run": 169,
+      "duration_s": 55.966,
+      "result": "FAILED (errors=1)"
+    },
+    "second": {
+      "tests_run": 169,
+      "duration_s": 53.689,
+      "result": "FAILED (errors=1)"
+    },
+    "diagnostic": {
+      "tests_run": 169,
+      "duration_s": 57.244,
+      "result": "OK"
+    },
+    "isolated_config_save_recheck": {
+      "tests_run": 1,
+      "duration_s": 9.81,
+      "result": "OK"
+    },
+    "issue": "两次常规回归在关闭GNSS的既有连续配置保存用例出现CONFIG_SAVE_FAILED，单项与带诊断全量复测通过。11月21日全量187项通过，原因仍待定位。"
+  },
+  "limitations": [
+    "UE真实场景、手机显示和局域网长时负载待联调。",
+    "回放按成员记录分页，固定快照也可能包含最新帧的部分成员。",
+    "GNSS使用局部坐标、线性漂移和高斯噪声，经纬度海拔换算待实现。"
+  ]
+}

@@ -12,6 +12,302 @@
     }
   ],
   "paths": {
+    "/api/v1/ue/events": {
+      "get": {
+        "summary": "UE CoreStateAccess 平铺集群状态SSE",
+        "description": "供CsaBackendSseClient集群模式读取米制三维位置、速度、XYZW姿态和体轴角速度。成员为平铺字段。事件携带UE视图专用续传id，可通过Last-Event-ID续传。",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "state 事件流，目标25Hz，无新帧时发送注释心跳",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "共享状态发布不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          }
+        ]
+      }
+    },
+    "/api/v1/replay/frames": {
+      "get": {
+        "summary": "查询10Hz状态回放帧",
+        "description": "返回arc.ue-replay/v1逐成员样本。三机每个录制时刻对应三条样本，分页offset及total按样本数计。用boot_id和frame_sequence跨页归并。source为米制真值，ue为厘米坐标。ue_device_id在数字后缀缺失、溢出或重复时为null，device_id保留完整字符串。",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since_ms",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "until_ms",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000,
+              "default": 200
+            }
+          },
+          {
+            "name": "allow_partial",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ],
+              "default": "0"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "按录制时间排序的samples、分页snapshot及integrity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "筛选参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "回放损坏或快照失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "录制启动失败、索引建立中或查询繁忙",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/replay/export": {
+      "get": {
+        "summary": "导出UE状态回放JSONL",
+        "description": "支持device_id、since_ms、until_ms和snapshot过滤。最多16 MiB；录制或索引不完整时拒绝导出。",
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since_ms",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "until_ms",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "snapshot",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "jsonl"
+              ],
+              "default": "jsonl"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "NDJSON文件；X-Replay-Schema为arc.ue-replay/v1",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "筛选参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "鉴权失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "录制失败、回放损坏或快照失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "导出超过16 MiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "索引建立中、繁忙或读取失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "检查仿真成员、审计及共享状态发布",
@@ -3491,6 +3787,186 @@
   },
   "components": {
     "schemas": {
+      "ReplaySample": {
+        "type": "object",
+        "required": [
+          "schema",
+          "device_id",
+          "boot_id",
+          "frame_sequence",
+          "recorded_at_unix_ms",
+          "source",
+          "ue"
+        ],
+        "properties": {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "arc.ue-replay/v1"
+            ]
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "ue_device_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "frame_sequence": {
+            "type": "integer"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "simulation_time_s": {
+            "type": "number"
+          },
+          "recorded_at_unix_ms": {
+            "type": "number"
+          },
+          "server_time_ms": {
+            "type": "number"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "position_m": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "velocity_m_s": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "angular_velocity_body_rad_s": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "ue": {
+            "type": "object",
+            "properties": {
+              "position_cm": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "linear_velocity_cm_s": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "quaternion_xyzw": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "angular_velocity_body_rad_s": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "flags": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ReplayPage": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "samples",
+              "total",
+              "snapshot",
+              "integrity",
+              "recording"
+            ],
+            "properties": {
+              "samples": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ReplaySample"
+                }
+              },
+              "total": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "next_offset": {
+                "type": "integer",
+                "nullable": true
+              },
+              "has_more": {
+                "type": "boolean"
+              },
+              "snapshot": {
+                "type": "string"
+              },
+              "integrity": {
+                "type": "object"
+              },
+              "recording": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
       "Vector3": {
         "type": "object",
         "nullable": true,
@@ -3863,6 +4339,107 @@
                   "stale_after_ms": {
                     "type": "integer",
                     "nullable": true
+                  }
+                }
+              },
+              "gnss_local_position": {
+                "type": "object",
+                "description": "启用GNSS误差仿真时提供米制局部坐标及样本年龄。",
+                "required": [
+                  "value",
+                  "source",
+                  "validity",
+                  "unit",
+                  "coordinate_frame",
+                  "age_ms",
+                  "reason"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "object",
+                    "nullable": true,
+                    "required": [
+                      "sequence",
+                      "simulation_time_s",
+                      "measured_at_unix_ms",
+                      "delivered_at_simulation_time_s",
+                      "position_m"
+                    ],
+                    "properties": {
+                      "sequence": {
+                        "type": "integer"
+                      },
+                      "simulation_time_s": {
+                        "type": "number"
+                      },
+                      "measured_at_unix_ms": {
+                        "type": "number"
+                      },
+                      "delivered_at_simulation_time_s": {
+                        "type": "number"
+                      },
+                      "position_m": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "SIM_GNSS"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "m"
+                    ]
+                  },
+                  "coordinate_frame": {
+                    "type": "string",
+                    "enum": [
+                      "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP"
+                    ]
+                  },
+                  "validity": {
+                    "type": "string",
+                    "enum": [
+                      "VALID",
+                      "STALE",
+                      "INVALID",
+                      "NOT_CONNECTED"
+                    ]
+                  },
+                  "age_ms": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stale_after_ms": {
+                    "type": "number"
+                  },
+                  "latency_ms": {
+                    "type": "number"
+                  },
+                  "rate_hz": {
+                    "type": "integer"
+                  },
+                  "packet_sequence": {
+                    "type": "integer"
+                  },
+                  "lost_packets": {
+                    "type": "integer"
+                  },
+                  "pending_samples": {
+                    "type": "integer"
                   }
                 }
               }

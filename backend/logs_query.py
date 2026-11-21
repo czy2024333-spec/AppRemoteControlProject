@@ -65,10 +65,14 @@ def _csv_line(row):
 class LogIndex:
     """原始 JSONL 是证据；SQLite 只是可重建索引，每周期处理量和缓存有界。"""
     def __init__(self, directory, members, *, batch_rows=MAX_BATCH_ROWS, poll_s=.05,
-                 max_export_bytes=MAX_EXPORT_BYTES):
-        self.directory = Path(directory)
+                 max_export_bytes=MAX_EXPORT_BYTES, primary_filename='fleet_events.jsonl',
+                 include_member_logs=True):
+        # SQLite 只读 URI 需要绝对路径。启动参数 --results 支持相对目录。
+        self.directory = Path(directory).resolve()
         self.directory.mkdir(parents=True,exist_ok=True)
-        self.paths = [self.directory/'fleet_events.jsonl']+[self.directory/name/'control_events.jsonl' for name in members]
+        self.paths = [self.directory/primary_filename]
+        if include_member_logs:
+            self.paths += [self.directory/name/'control_events.jsonl' for name in members]
         self.db_path = self.directory/('.logs-index-'+uuid.uuid4().hex+'.sqlite3')
         self.batch_rows, self.poll_s = batch_rows, poll_s
         self.max_export_bytes = max_export_bytes

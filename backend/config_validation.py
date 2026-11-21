@@ -1,12 +1,14 @@
 """先完整校验集群启动配置，再创建任何仿真实例或写文件。"""
 import copy
 import math
+from gnss import validate_gnss_config
 from runtime_info import identifier
 
 
 def validate_cluster_config(config):
     from cluster_member import validate_member
-    if not isinstance(config,dict) or set(config)!={'cluster_id','limits','acceptance','members','groups'}:
+    required = {'cluster_id','limits','acceptance','members','groups'}
+    if not isinstance(config,dict) or required-set(config) or set(config)-required-{'gnss'}:
         raise ValueError('集群配置需要cluster_id/limits/acceptance/members/groups且禁止未知字段')
     identifier(config['cluster_id'])
     limits=config['limits']
@@ -35,4 +37,7 @@ def validate_cluster_config(config):
         identifier(group)
         if not isinstance(ids,list) or not ids or any(not isinstance(n,str) for n in ids) or len(set(ids))!=len(ids) or set(ids)-set(names):
             raise ValueError('分组必须包含已注册成员且不能为空或重复')
-    return copy.deepcopy(config)
+    result = copy.deepcopy(config)
+    if 'gnss' in result:
+        result['gnss'] = validate_gnss_config(result['gnss'])
+    return result

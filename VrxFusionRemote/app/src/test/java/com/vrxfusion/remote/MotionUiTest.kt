@@ -20,6 +20,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.drawToBitmap
 import androidx.lifecycle.ViewModelProvider
 import com.vrxfusion.remote.ui.*
+import com.vrxfusion.remote.ui.design.SafetyDock
 import com.vrxfusion.remote.ui.theme.VrxTheme
 import org.junit.Assert.*
 import org.junit.Rule
@@ -90,7 +91,7 @@ class MotionUiTest {
             SideEffect {current=sheet}
             if (sheet.visible) FlightSettingsPanel(0,{},HudPreferences(),{},{open.value=false},
                 motionProgress=sheet.progress,motionInputBlocked=!sheet.ready,
-                safetyContent={FlightSafetyButtons(true,{stop++},{protect++})}) {
+                safetyContent={SafetyDock(true,true,{stop++},{protect++})}) {
                 Button(onClick={},modifier=Modifier.testTag("ordinary-body-button")) {Text("普通操作")}
             }
         }}
@@ -173,15 +174,19 @@ class MotionUiTest {
         frames()
         val vm=rule.runOnIdle {ViewModelProvider(rule.activity)[MainViewModel::class.java]}
         try {
+            // 首页分组列表在横屏需要先滚动，恢复时钟以完成滚动后再逐帧录制。
+            rule.mainClock.autoAdvance=true
+            val managementRow=rule.onNodeWithText("连接与设备管理").performScrollTo().assertIsDisplayed()
+            rule.mainClock.autoAdvance=false
             save("page-forward-00")
-            rule.onNodeWithText("连接与设备管理").performClick()
+            managementRow.performClick()
             repeat(14) {n->frames(32);save("page-forward-${(n+1).toString().padStart(2,'0')}")}
             // 横屏下字段可能需滚动；冻结录帧时钟时仅确认目标页面已经挂载。
             rule.onNodeWithTag("backend-address").assertExists()
             save("page-back-00")
             rule.onNodeWithTag("management-back").performClick()
             repeat(14) {n->frames(32);save("page-back-${(n+1).toString().padStart(2,'0')}")}
-            rule.onNodeWithText("01  独立操纵").performClick()
+            rule.onNodeWithText("01  独立操纵").assertIsDisplayed().performClick()
             frames(450)
             assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,rule.activity.requestedOrientation)
             rule.onNodeWithContentDescription("切换竖屏").assertDoesNotExist()

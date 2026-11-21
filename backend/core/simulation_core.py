@@ -159,10 +159,17 @@ class SimulationCore:
         z = float(self._state['x'][2])
         distance = float(np.linalg.norm(self._state['x'][:2] - self._origin_xy))
         speed = float(np.linalg.norm(self._state['v']))
-        inside = low - tolerance <= z <= high + tolerance and distance <= radius + tolerance
-        settled = speed <= self.limits.boundary_recovery_max_speed_m_s
+        blockers = []
+        if self._boundary_recovery_required:
+            # 解除保护和 HUD 共用这份判定，容差也保持一致。
+            if not low - tolerance <= z <= high + tolerance:
+                blockers.append('ALTITUDE')
+            if not distance <= radius + tolerance:
+                blockers.append('RADIUS')
+            if not speed <= self.limits.boundary_recovery_max_speed_m_s:
+                blockers.append('SPEED')
         return dict(required=self._boundary_recovery_required,
-                    can_resume=not self._boundary_recovery_required or (inside and settled),
+                    can_resume=not blockers, blockers=blockers,
                     actual_altitude_m=z, actual_horizontal_radius_m=distance, actual_speed_m_s=speed,
                     min_resume_altitude_m=low, max_resume_altitude_m=high,
                     max_resume_horizontal_radius_m=radius,
@@ -216,8 +223,8 @@ class SimulationCore:
         """只能由B确认控制权及新来源中立后调用；本接口不承担鉴权。"""
         if neutral_confirmed is not True:
             raise ValueError("需要B确认中立输入")
-        if self._boundary_recovery_required and not self.boundary_recovery()['can_resume']:
-            recovery = self.boundary_recovery()
+        recovery = self.boundary_recovery()
+        if not recovery['can_resume']:
             raise BoundaryRecoveryPending(
                 '边界恢复中：实际高度需处于'
                 f"[{recovery['min_resume_altitude_m']:.3f}, {recovery['max_resume_altitude_m']:.3f}]米，"

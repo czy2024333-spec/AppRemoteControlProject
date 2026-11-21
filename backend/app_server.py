@@ -12,18 +12,22 @@ import sys
 import threading
 import time
 import uuid
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from http_transport import JsonHandler, TransportError, validate_origins
-from runtime_info import IMPLEMENTATION_VERSION, is_continuous
+from runtime_info import (CLUSTER_BARRIER_PATH, COMMAND_HISTORY_LIMIT, COMMAND_QUEUE_LIMIT, IMPLEMENTATION_VERSION,
+    MAX_CLIENT_CLOCK_AHEAD_MS, PROTECT_QUEUE_RESERVE, RECENT_COMMANDS_LIMIT,
+    SAFETY_COMMAND_HISTORY_LIMIT, STATE_STREAM_TARGET_HZ, STOP_QUEUE_RESERVE, is_continuous)
 from control_config import CAPABILITIES, DEFAULT, update as update_config, validate as validate_config
-from input_protocol import SUPPORTED, voice_result, ring_event
+from input_protocol import SUPPORTED, VOICE_SAFETY_PATHS, voice_result, ring_event
 
 CORE_DIR = Path(__file__).resolve().parent/'core'
 sys.path.insert(0, str(CORE_DIR))
 from simulation_core import BoundaryRecoveryPending
 SOURCE_IDS = ('app','ring','voice')
 DEMO_TOKENS = {'app':'demo-app-token-2026', 'ring':'demo-ring-token-2026', 'voice':'demo-voice-token-2026'}
+SAFETY_PATHS = frozenset(('/api/stop','/api/protect','/api/disconnect'))
 VOICE_MOTIONS = {
     'forward': (.3, 0., 0., 0.), 'backward': (-.3, 0., 0., 0.),
     'left': (0., .3, 0., 0.), 'right': (0., -.3, 0., 0.),
@@ -33,15 +37,50 @@ VOICE_MOTIONS = {
 
 
 class APIError(Exception):
-    def __init__(self, status, message, code='REQUEST_REJECTED'):
+    def __init__(self, status, message, code='REQUEST_REJECTED', *, timing=None):
         super().__init__(message)
         self.status, self.message, self.code = status, message, code
+        self.timing = timing
+
+
+def validate_source_tokens(tokens=None):
+    tokens = dict(tokens or DEMO_TOKENS)
+    if set(tokens) != set(SOURCE_IDS) or len(set(tokens.values())) != len(SOURCE_IDS):
+        raise ValueError('三种来源必须分别配置不同Token')
+    if any(not isinstance(t, str) or len(t)<16 or not t.isascii() or any(c.isspace() for c in t) for t in tokens.values()):
+        raise ValueError('Token至少16个无空白ASCII字符')
+    return tokens
 
 
 def number(value, name):
-    if type(value) not in (int, float) or not math.isfinite(value):
+    # 用数值比较排除超大 JSON 整数，避免转为浮点数时溢出并终止仿真线程。
+    if type(value) not in (int, float) or not -sys.float_info.max <= value <= sys.float_info.max:
         raise APIError(400, name+'必须是有限数值', 'INVALID_ARGUMENT')
     return value
+
+
+def timing_details(item, age_ms, ttl_ms, reason):
+    return dict(reason=reason, server_received_at_ms=item['epoch'], observed_age_ms=age_ms,
+        queue_age_ms=(time.monotonic()-item['received'])*1000, ttl_ms=ttl_ms,
+        max_client_clock_ahead_ms=MAX_CLIENT_CLOCK_AHEAD_MS)
+
+
+def safety_action_path(path, body, source, policy):
+    """识别应按安全动作处理的请求，完整校验由执行路径完成。"""
+    if path in SAFETY_PATHS:
+        return path
+    try:
+        if source=='voice' and path in ('/api/voice','/api/voice-result'):
+            action = voice_result(body,policy).get('action')
+            return VOICE_SAFETY_PATHS.get(action)
+        if source=='ring' and path=='/api/ring-event':
+            mapped = ring_event(body,policy).get('path')
+            if mapped in SAFETY_PATHS:
+                return mapped
+    except ValueError:
+        # 无效报文走原校验和拒绝路径，不能获得安全动作的优先待遇。
+        pass
+    return None
 
 
 class SimulationService:
@@ -49,16 +88,14 @@ class SimulationService:
         self.core = core
         # 独立多机模式注入异步审计；旧模式保留原有日志行为。
         self.audit_sink = audit_sink
-        self.tokens = dict(tokens or DEMO_TOKENS)
-        if set(self.tokens) != set(SOURCE_IDS) or len(set(self.tokens.values())) != 3:
-            raise ValueError('三种来源必须分别配置不同Token')
-        if any(not isinstance(t, str) or len(t)<16 or not t.isascii() or any(c.isspace() for c in t) for t in self.tokens.values()):
-            raise ValueError('Token至少16个无空白ASCII字符')
-        self.commands = queue.PriorityQueue(maxsize=128)
+        self.tokens = validate_source_tokens(tokens)
+        self.commands = queue.PriorityQueue(maxsize=COMMAND_QUEUE_LIMIT+STOP_QUEUE_RESERVE+PROTECT_QUEUE_RESERVE)
+        self.command_admission_lock = threading.Lock()
         self.queue_counter = itertools.count()
         self.device_id = 'sim-drone-1'
         self.config = validate_config(config or DEFAULT)
         self.config_version = 1
+        self.control_config_origin = 'REGISTRY'
         self.config_path = config_path
         self.boot_id = uuid.uuid4().hex
         self.audit_path = Path(__file__).resolve().parent/'results/control_events.jsonl'
@@ -78,13 +115,20 @@ class SimulationService:
         self.owner = None
         self.owner_generation = 0
         self.control_epoch = uuid.uuid4().hex
+        self.control_epoch_reason = 'INITIAL_HOLD'
+        self.last_applied = None
         self.motion = None
         self.deadline = None
         self.voice_end = None
         self.filtered_yaw = 0.
-        self.transition = 'INITIAL_HOLD'
+        self.transition = self.control_epoch_reason
         self.failure = None
-        self.latest = None
+        self._published = None
+        self.state_changed = None
+        self.tick_intervals = deque(maxlen=512)
+        self.tick_schedule_origin = None
+        self.tick_overrun_count = 0
+        self.tick_diagnostics = dict(tick_jitter_p99_ms=None, tick_jitter_samples=0)
         self.publish()
 
     def authenticate(self, header):
@@ -102,12 +146,8 @@ class SimulationService:
         if self.thread.ident is not None:
             self.thread.join(3)
 
-    def publish(self):
-        raw = self.core.get_state()
-        if raw['sequence'] != getattr(self,'_health_sequence',None):
-            self._health_sequence=raw['sequence']
-            self._health_last_step=time.monotonic()
-        state = dict(api_version='0.5', implementation_version=IMPLEMENTATION_VERSION, boot_id=self.boot_id, data_source=raw['data_source'],
+    def build_state(self, raw):
+        return dict(api_version='0.5', implementation_version=IMPLEMENTATION_VERSION, boot_id=self.boot_id, data_source=raw['data_source'],
             boundary_recovery=raw['boundary_recovery'],
             server_time_ms=time.time()*1000, simulation_time_s=raw['time_s'], sequence=raw['sequence'],
             mode=raw['mode'], protection_reason=raw['protection_reason'],
@@ -120,21 +160,41 @@ class SimulationService:
             hardware_acceptance='PENDING_REAL_HARDWARE_AND_SDK',
             config_version=self.config_version, control_config=self.config, capabilities=CAPABILITIES,
             recent_events=self.events[-8:],
-            recent_commands=[{k:v[k] for k in ('source','command_id','status','reason')} for v in list(self.records.values())[-8:]],
-            control_epoch=self.control_epoch, arbitration_policy='USER_SWITCH_NEUTRAL',
+            recent_commands=[{k:v[k] for k in ('source','command_id','status','reason')}
+                for v in list(self.records.values())[-RECENT_COMMANDS_LIMIT:]],
+            control_epoch=self.control_epoch, control_epoch_reason=self.control_epoch_reason,
+            arbitration_policy='USER_SWITCH_NEUTRAL',
+            last_applied=self.last_applied,
             owner_generation=self.owner_generation,
             last_sequences={k:v['sequence'] for k,v in self.sessions.items()},
             transition_reason=self.transition, filtered_yaw_rate_rad_s=self.filtered_yaw,
-            sim_rate_hz=1/self.core.dt, state_stream_target_hz=25,
+            sim_rate_hz=1/self.core.dt, state_stream_target_hz=STATE_STREAM_TARGET_HZ,
             voice_remaining_ms=max(0., (self.voice_end-time.monotonic())*1000) if self.voice_end else 0.)
-        # 一次提交整份状态，GET/SSE不会混合旧位置和新控制权。
-        with self.lock:
-            self.latest = state
 
-    def refresh_record(self, key):
+    def publish(self, raw=None):
+        if raw is None:
+            raw = self.core.get_state()
+        previous = self._published
+        stepped_at = time.monotonic() if previous is None or raw['sequence'] != previous[0]['sequence'] else previous[1]
+        # 发布后不再修改快照。状态与步进时间一同替换，读者复制时无需持有发布锁。
+        self._published = (self.build_state(raw), stepped_at)
+        if self.state_changed is not None:
+            self.state_changed.set()
+
+    def published_snapshot(self):
+        """内部只读引用，包含完整状态及对应的单调步进时刻。"""
+        return self._published
+
+    @property
+    def last_step_at(self):
+        return self._published[1]
+
+    def refresh_record(self, key, *, evicted_id=None):
         # 命令历史只在变更时更新查询快照，避免每个100Hz动力学步复制全部历史。
         record = self.records[key]
         with self.lock:
+            if evicted_id is not None:
+                self.command_view.pop((record['source'],evicted_id),None)
             self.command_view[(record['source'],record['command_id'])] = {k:v for k,v in record.items() if k!='fingerprint'}
 
     def command_state(self, source, command_id, requester):
@@ -148,46 +208,49 @@ class SimulationService:
             return copy.deepcopy(result)
 
     def state(self):
-        with self.lock:
-            if self.failure:
-                raise APIError(503, self.failure, 'SIMULATION_FAILURE')
-            return copy.deepcopy(self.latest)
+        if self.failure:
+            raise APIError(503, self.failure, 'SIMULATION_FAILURE')
+        return copy.deepcopy(self.published_snapshot()[0])
 
     def health(self):
-        with self.lock:
-            state = self.latest
-            alive = self.thread.is_alive()
-            failure = self.failure
-            # 健康新鲜度使用动力学步进的单调时间，不能被系统校时或频繁GET/心跳掩盖。
-            age = max(0.,(time.monotonic()-self._health_last_step)*1000)
-            healthy = alive and failure is None and age<500
-            return dict(healthy=healthy,implementation_version=IMPLEMENTATION_VERSION,
-                mode='single',device_id=self.device_id,boot_id=self.boot_id,
-                worker_alive=alive,state_age_ms=age,failure=failure,
-                protection_mode=state['mode'])
+        state, stepped_at = self.published_snapshot()
+        alive = self.thread.is_alive()
+        failure = self.failure
+        # 健康新鲜度使用动力学步进的单调时间，不能被校时或心跳刷新。
+        age = max(0.,(time.monotonic()-stepped_at)*1000)
+        return dict(healthy=alive and failure is None and age<500,implementation_version=IMPLEMENTATION_VERSION,
+            mode='single',device_id=self.device_id,boot_id=self.boot_id,
+            worker_alive=alive,state_age_ms=age,failure=failure, protection_mode=state['mode'],
+            sim_rate_hz=state['sim_rate_hz'],tick_overrun_count=self.tick_overrun_count,**self.tick_diagnostics)
 
     def submit(self, path, body, source):
+        if path==CLUSTER_BARRIER_PATH:
+            raise APIError(404,'接口不存在','NOT_FOUND')
+        return self._submit(path,body,source)
+
+    def _submit(self, path, body, source):
+        if self.failure:
+            raise APIError(503, self.failure, 'SIMULATION_FAILURE')
         item = dict(path=path, body=body, source=source, received=time.monotonic(),
                     epoch=time.time()*1000, done=threading.Event(),
                     claim_lock=threading.Lock(), queue_state='QUEUED')
+        # 入队优先级使用已发布配置，执行仍按当前策略校验来源、会话、轮次、序号和期限。
+        policy = self.published_snapshot()[0]['control_config']['input_policy']
+        if path==CLUSTER_BARRIER_PATH:
+            # 管理器内部屏障使用保护预留，避免已有普通积压阻塞清除旧输入。
+            priority, queue_limit = 0, self.commands.maxsize
+        elif (action := safety_action_path(path,body,source,policy))=='/api/protect':
+            priority, queue_limit = 0, self.commands.maxsize
+        elif action:
+            priority, queue_limit = 1, COMMAND_QUEUE_LIMIT+STOP_QUEUE_RESERVE
+        else:
+            priority, queue_limit = (1 if path=='/api/cancel' else 2), COMMAND_QUEUE_LIMIT
         try:
-            priority = 0 if path == '/api/protect' else 1 if path in ('/api/stop','/api/cancel','/api/disconnect') else 2
-            # 规范化之前只决定排队优先级，真正执行仍必须经过全部参数/权限/时效校验。
-            if source=='voice' and path in ('/api/voice','/api/voice-result'):
-                try:
-                    semantic = voice_result(body,self.state()['control_config']['input_policy']).get('action')
-                    if semantic in ('stop','hover','protect'):
-                        priority = 0 if semantic=='protect' else 1
-                except ValueError:
-                    pass
-            if source=='ring' and path=='/api/ring-event':
-                try:
-                    mapped = ring_event(body,self.state()['control_config']['input_policy']).get('path')
-                    if mapped in ('/api/stop','/api/protect','/api/disconnect'):
-                        priority = 0 if mapped=='/api/protect' else 1
-                except ValueError:
-                    pass
-            self.commands.put_nowait((priority,next(self.queue_counter),item))
+            # 串行检查并入队，防止多个普通请求同时挤占安全预留。消费者只会减少队列项。
+            with self.command_admission_lock:
+                if self.commands.qsize()>=queue_limit:
+                    raise queue.Full
+                self.commands.put_nowait((priority,next(self.queue_counter),item))
         except queue.Full:
             raise APIError(503, '指令队列已满', 'QUEUE_FULL')
         if not item['done'].wait(2):
@@ -211,6 +274,8 @@ class SimulationService:
         self.finish_command(self.active_command, 'CANCELLED', reason)
         self.active_command = None
         self.control_epoch = uuid.uuid4().hex
+        self.control_epoch_reason = reason
+        self.last_applied = None
         self.transition = reason
         if release:
             if self.owner in self.sessions:
@@ -292,11 +357,13 @@ class SimulationService:
         if not 0 < ttl <= self.config['input_ttl_ms']:
             raise APIError(400, 'ttl_ms超过已配置范围', 'INVALID_ARGUMENT')
         age = item['epoch']-sent
-        if age < -50:
-            raise APIError(400, '客户端时钟超前超过50ms', 'CLOCK_SKEW')
+        if age < -MAX_CLIENT_CLOCK_AHEAD_MS:
+            raise APIError(400, f'客户端时钟超前超过{MAX_CLIENT_CLOCK_AHEAD_MS}ms', 'CLOCK_SKEW',
+                timing=timing_details(item,age,ttl,'CLIENT_TIME_AHEAD'))
         expires = item['received']+(ttl-max(0., age))/1000
         if expires <= time.monotonic():
-            raise APIError(409, '报文已过期', 'EXPIRED_COMMAND')
+            reason = 'EXPIRED_AT_RECEIPT' if age >= ttl else 'EXPIRED_WHILE_QUEUED'
+            raise APIError(409, '报文已过期', 'EXPIRED_COMMAND', timing=timing_details(item,age,ttl,reason))
         return seq, expires
 
     def accept_owner(self, source):
@@ -332,7 +399,20 @@ class SimulationService:
         # 全部来源都在同一仿真线程串行校验、仲裁、下发，避免两路同时更新核心。
         self.expire()
         body, source, path = item['body'], item['source'], item['path']
+        safety_path = safety_action_path(path,body,source,self.config['input_policy'])
+        # 审计可能在入队后失效，执行前按当前映射保留安全动作并拒绝普通命令。
+        if self.audit_sink is not None and self.audit_sink.failure and safety_path is None:
+            raise APIError(503,'审计不可用，普通操纵已停用','AUDIT_UNAVAILABLE')
         if path == '/api/session':
+            if 'client_sent_at_ms' in body:
+                # 新客户端可在申请时检查校准后的时间戳，失败在替换旧会话前返回。
+                sent = number(body['client_sent_at_ms'],'client_sent_at_ms')
+                age = item['epoch']-sent
+                ttl = self.config['input_ttl_ms']
+                if not -MAX_CLIENT_CLOCK_AHEAD_MS <= age < ttl:
+                    reason = 'CLIENT_TIME_AHEAD' if age < 0 else 'EXPIRED_AT_RECEIPT'
+                    raise APIError(409,'会话时间戳超出允许窗口，校时后请重新申请','CLOCK_SYNC_REQUIRED',
+                        timing=timing_details(item,age,ttl,reason))
             if self.owner == source or self.selected_source == source or self.pending_source == source or (source=='app' and (self.selected_source is not None or self.pending_source is not None)):
                 self.core.stop()
                 self.clear_selection('SESSION_REPLACED')
@@ -343,7 +423,8 @@ class SimulationService:
                 with self.lock:
                     self.command_view = {k:v for k,v in self.command_view.items() if k[0]!=source}
             session_id = uuid.uuid4().hex
-            self.sessions[source] = dict(id=session_id,sequence=-1,intent=-1,retired_intent=-1,event_sequence=-1,connected=True,last_seen=time.monotonic())
+            self.sessions[source] = dict(id=session_id,sequence=-1,intent=-1,retired_intent=-1,event_sequence=-1,
+                connected=True,last_seen=time.monotonic(),regular_command_count=0,safety_command_ids=deque())
             return dict(session_id=session_id,source=source,device_id=self.device_id)
         ring_continuous = is_continuous(path,body) and path=='/api/ring-event'
         continuous = path in ('/api/control','/api/input','/api/heartbeat') or ring_continuous
@@ -364,7 +445,9 @@ class SimulationService:
             key = (session['id'], command_id)
             content = {k:v for k,v in body.items() if k not in ('sent_at_ms','ttl_ms')}
             try:
-                fingerprint = hashlib.sha256(json.dumps(content,sort_keys=True,allow_nan=False).encode()).hexdigest()
+                # 停止和保护的请求体可以相同，幂等校验必须同时比较动作路径。
+                action = dict(path=path, body=content)
+                fingerprint = hashlib.sha256(json.dumps(action,sort_keys=True,allow_nan=False).encode()).hexdigest()
             except ValueError:
                 raise APIError(400,'命令包含非有限数值','INVALID_ARGUMENT')
             if key in self.records:
@@ -373,17 +456,9 @@ class SimulationService:
                 if record['fingerprint']!=fingerprint:
                     raise APIError(409,'同一command_id被用于不同动作','COMMAND_ID_REUSED')
                 return dict(command_id=command_id,command_status=record['status'],idempotent_replay=True)
-            if sum(k[0]==session['id'] for k in self.records)>=1024:
+            if safety_path is None and session['regular_command_count']>=COMMAND_HISTORY_LIMIT:
                 raise APIError(503,'本会话离散命令历史已满，停止后重新建会话','COMMAND_HISTORY_FULL')
-        safety_protect = False
-        try:
-            if source=='voice' and path in ('/api/voice','/api/voice-result'):
-                safety_protect = voice_result(body,self.config['input_policy']).get('action')=='protect'
-            elif source=='ring' and path=='/api/ring-event':
-                safety_protect = ring_event(body,self.config['input_policy']).get('path')=='/api/protect'
-        except ValueError:
-            pass
-        seq, expires = self.envelope(item, require_epoch=path not in ('/api/protect','/api/heartbeat') and not safety_protect)
+        seq, expires = self.envelope(item, require_epoch=path!='/api/heartbeat' and safety_path!='/api/protect')
         if discrete:
             # 预建记录以便执行过程中完成/取消其他任务；失败时撤销此记录。
             self.records[key] = dict(source=source,command_id=body['command_id'],fingerprint=fingerprint,
@@ -397,9 +472,21 @@ class SimulationService:
         session['sequence'] = seq
         session['last_seen'] = item['received']
         if key is not None:
-            self.refresh_record(key)
-        return dict(accepted_command_sequence=seq, **({} if key is None else dict(
-            command_id=body['command_id'],command_status=self.records[key]['status'],idempotent_replay=False)))
+            evicted_id = None
+            if safety_path is None:
+                session['regular_command_count'] += 1
+            else:
+                # 安全动作执行成功后才换出最早的安全回执。普通记录和失败前已有的回执仍可查询。
+                history = session['safety_command_ids']
+                if len(history)==SAFETY_COMMAND_HISTORY_LIMIT:
+                    evicted_id = history.popleft()
+                    del self.records[(session['id'],evicted_id)]
+                history.append(key[1])
+            self.refresh_record(key,evicted_id=evicted_id)
+        result = dict(accepted_command_sequence=seq)
+        if key is not None:
+            result.update(command_id=key[1],command_status=self.records[key]['status'],idempotent_replay=False)
+        return result
 
     def axes(self, value):
         if not isinstance(value,list) or len(value)!=4:
@@ -523,6 +610,8 @@ class SimulationService:
                 except OSError:
                     raise APIError(503,'配置保存失败，原配置仍有效','CONFIG_SAVE_FAILED')
             self.config = candidate
+            if self.config_path is not None:
+                self.control_config_origin = 'FILE'
             self.config_version += 1
             self.clear_selection('CONFIG_UPDATED')
             self.new_epoch('CONFIG_UPDATED')
@@ -543,7 +632,9 @@ class SimulationService:
                 if not 100<=duration<=5000:
                     raise APIError(400,'语音执行时长100–5000ms','INVALID_ARGUMENT')
                 if item['received']+duration/1000<=time.monotonic():
-                    raise APIError(409,'语音在队列中过期','EXPIRED_COMMAND')
+                    age = item['epoch']-body['sent_at_ms']
+                    raise APIError(409,'语音在队列中过期','EXPIRED_COMMAND',
+                        timing=timing_details(item,age,body['ttl_ms'],'VOICE_DURATION_ELAPSED'))
                 # 映射在识别适配层只应用一次，避免二次映射绕过危险动作确认。
                 template = VOICE_MOTIONS[action]
                 limits = [self.config['max_horizontal_speed_m_s']]*2+[self.config['max_vertical_speed_m_s'],self.config['max_yaw_rate_rad_s']]
@@ -569,6 +660,9 @@ class SimulationService:
             # 完成参数/能力/来源/模式检查后，才向动力学发送；非法输入不能改变控制权。
             self.accept_owner(source)
             self.core.set_motion(*motion[:3],self.filtered_yaw,.5)
+            # 心跳和等待确认不推进运动回执。语音确认关联原始语音报文的序号。
+            self.last_applied = dict(control_epoch=self.control_epoch, source=source.upper(),
+                intent_sequence=intent, command_sequence=body['command_sequence'])
             if self.active_command is not None:
                 self.finish_command(self.active_command,'CANCELLED','REPLACED_BY_NEW_INPUT')
             self.active_command = key if path=='/api/voice' else None
@@ -637,7 +731,7 @@ class SimulationService:
         if action not in SUPPORTED:
             # 起飞/降落/返航是任务语义，当前空中悬停模型不具备这些任务，不能假执行。
             raise APIError(501,'已识别'+action+'，但起降/返航任务模块尚未实现','TASK_NOT_SUPPORTED')
-        translated['path']='/api/protect' if action=='protect' else '/api/stop' if action in ('stop','hover') else '/api/voice'
+        translated['path']=VOICE_SAFETY_PATHS.get(action,'/api/voice')
         if parsed['needs_confirmation']:
             self.accept_owner(source)
             # 一个新危险动作只等待一次确认，等待期间不会向动力学发送该运动。
@@ -657,14 +751,24 @@ class SimulationService:
             self.filtered_yaw += max(-delta, min(delta,difference))
             self.core.set_motion(*self.motion[:3], self.filtered_yaw, .5)
         previous = self.core.get_state()['mode']
-        self.core.step()
-        if previous != 'PROTECTED' and self.core.get_state()['mode'] == 'PROTECTED':
-            self.clear_selection(self.core.get_state()['protection_reason'])
-            self.new_epoch(self.core.get_state()['protection_reason'])
-        self.publish()
+        raw = self.core.step()
+        if previous != 'PROTECTED' and raw['mode'] == 'PROTECTED':
+            self.clear_selection(raw['protection_reason'])
+            self.new_epoch(raw['protection_reason'])
+        self.publish(raw)
+
+    def _wait_for_next_tick(self, next_tick):
+        # Windows 上 Event.wait 的短超时会被系统计时粒度拉长。每次短睡后重新检查指令和停止信号。
+        delay = min(.002, next_tick - time.monotonic())
+        if delay > 0.:
+            time.sleep(delay)
 
     def run(self):
         next_tick, last = time.monotonic(), time.monotonic()
+        # 观察线程用计划时刻对齐取样，避免跟随每次动力学完成时刻的抖动。
+        self.tick_schedule_origin = next_tick
+        last_tick = None
+        last_diagnostics = last
         try:
             while not self.stopping.is_set():
                 now = time.monotonic()
@@ -673,6 +777,7 @@ class SimulationService:
                     self.clear_selection('SCHEDULER_STALL')
                     self.new_epoch('SCHEDULER_STALL')
                     next_tick = now
+                    self.tick_schedule_origin = next_tick
                 last = now
                 self.expire()
                 # 每轮命令耗时有界，优先保证动力学和TTL检查继续推进。
@@ -714,9 +819,19 @@ class SimulationService:
                         item['done'].set()
                 now = time.monotonic()
                 if now >= next_tick:
+                    if now-next_tick >= self.core.dt:
+                        self.tick_overrun_count += 1
+                    if last_tick is not None:
+                        self.tick_intervals.append(abs(now-last_tick-self.core.dt)*1000)
+                    last_tick = now
+                    if self.tick_intervals and now-last_diagnostics >= 1.:
+                        samples = sorted(self.tick_intervals)
+                        self.tick_diagnostics = dict(tick_jitter_p99_ms=samples[math.ceil(.99*len(samples))-1],
+                            tick_jitter_samples=len(samples))
+                        last_diagnostics = now
                     self.tick()
                     next_tick += self.core.dt
-                self.stopping.wait(max(0.,min(.002,next_tick-time.monotonic())))
+                self._wait_for_next_tick(next_tick)
         except Exception as exc:
             with self.lock:
                 self.failure = '仿真线程异常：'+str(exc)
@@ -784,7 +899,10 @@ def make_server(service, host, port, allowed_origins=()):
                 self.reply(200,dict(ok=True,data=result))
             except (APIError,TransportError) as exc:
                 if post: self.close_connection=True
-                self.reply(exc.status,dict(ok=False,error=exc.message,error_code=exc.code))
+                payload = dict(ok=False,error=exc.message,error_code=exc.code)
+                if isinstance(exc, APIError) and exc.timing is not None:
+                    payload['timing'] = exc.timing
+                self.reply(exc.status,payload)
             except OSError:
                 self.close_connection=True
 

@@ -16,6 +16,38 @@ def write(path,value):
     path.write_text(json.dumps(value,ensure_ascii=False,indent=2,allow_nan=False)+'\n',encoding='utf-8')
 
 
+def add_hud_state_fields(state):
+    fields = state['properties']
+    freshness = dict(age_ms=dict(type='number',nullable=True),reason=dict(type='string',nullable=True))
+    for name in ('position','velocity','attitude','angular_velocity'):
+        fields[name]['properties'].update(freshness)
+    fields['sensors'].setdefault('properties',{})['local_position_velocity'] = dict(
+        type='object',properties=dict(**freshness,stale_after_ms=dict(type='integer',nullable=True)))
+    fields['sensors']['properties']['gnss_local_position'] = dict(
+        type='object',description='启用GNSS误差仿真时提供米制局部坐标及样本年龄。',
+        required=['value','source','validity','unit','coordinate_frame','age_ms','reason'],
+        properties=dict(
+            value=dict(type='object',nullable=True,required=['sequence','simulation_time_s',
+                'measured_at_unix_ms','delivered_at_simulation_time_s','position_m'],
+                properties=dict(sequence=dict(type='integer'),simulation_time_s=dict(type='number'),
+                    measured_at_unix_ms=dict(type='number'),delivered_at_simulation_time_s=dict(type='number'),
+                    position_m=dict(type='array',minItems=3,maxItems=3,items=dict(type='number')))),
+            source=dict(type='string',enum=['SIM_GNSS']),unit=dict(type='string',enum=['m']),
+            coordinate_frame=dict(type='string',enum=['SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP']),
+            validity=dict(type='string',enum=['VALID','STALE','INVALID','NOT_CONNECTED']),**freshness,
+            stale_after_ms=dict(type='number'),latency_ms=dict(type='number'),rate_hz=dict(type='integer'),
+            packet_sequence=dict(type='integer'),lost_packets=dict(type='integer'),pending_samples=dict(type='integer')))
+    fields['control']['properties'].update(active=dict(type='boolean'),awaiting_neutral=dict(type='boolean'),
+        epoch_reason=dict(type='string',nullable=True,description='推进该控制轮次的原因'),
+        last_applied=dict(type='object',nullable=True,properties=dict(control_epoch=dict(type='string'),
+            source=dict(type='string'),intent_sequence=dict(type='integer'),command_sequence=dict(type='integer'))))
+    fields.update(protection=dict(type='object',properties=dict(latched=dict(type='boolean'),
+        reason=dict(type='string',nullable=True), recovery=dict(type='object',nullable=True,
+            properties=dict(blockers=dict(type='array',items=dict(type='string',enum=['ALTITUDE','RADIUS','SPEED'])))))),
+        protection_reason=dict(type='string',nullable=True),target_yaw_rad=dict(type='number',nullable=True),
+        environment=dict(type='object',nullable=True))
+
+
 def openapi():
     ref=lambda name: {'$ref':'#/components/schemas/'+name}
     number={'type':'number'}; text={'type':'string'}
@@ -38,6 +70,7 @@ def openapi():
         sensors={'type':'object'},task={'type':'object'},video={'type':'object'},alarms=dict(type='array',items={'type':'object'}),
         control=dict(type='object',properties=dict(source=nullable_text,selected_source=nullable_text,pending_source=nullable_text,
             phase=text,control_epoch=text,has_control=dict(type='boolean',nullable=True,description='观察请求无法确认租约，当前为null'),lease_required={'type':'boolean'}))))
+    add_hud_state_fields(state)
     schemas=dict(Vector3=vec,Quaternion=quat,DeviceState=state,
         FleetState=dict(type='object',required=['contract_version','cluster_id','boot_id','target_revision','members','selection'],
             properties=dict(contract_version=text,cluster_id=text,boot_id=text,target_revision={'type':'integer'},

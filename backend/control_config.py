@@ -3,11 +3,13 @@ import copy
 import math
 from input_protocol import DEFAULT_POLICY, validate_policy
 
+INPUT_TTL_MAX_MS = 500
+
 DEFAULT = {
     'input_policy': copy.deepcopy(DEFAULT_POLICY),
     'sensitivity': 1., 'deadzone': .08,
     'max_horizontal_speed_m_s': .5, 'max_vertical_speed_m_s': .5, 'max_yaw_rate_rad_s': .5,
-    'input_ttl_ms': 500,
+    'input_ttl_ms': INPUT_TTL_MAX_MS,
     'sources_enabled': {'app':True,'ring':True,'voice':True},
     'input_mapping': {'app':[1,2,3,4],'ring':[1,2,3,4]},
     'voice_mapping': {k:k for k in ('forward','backward','left','right','up','down','turn_left','turn_right')},
@@ -22,7 +24,7 @@ def validate(candidate):
         raise ValueError('仅允许修改公开配置字段')
     for key, low, high in [('sensitivity',.1,1.),('deadzone',0.,.4),
                           ('max_horizontal_speed_m_s',.05,.5),('max_vertical_speed_m_s',.05,.5),
-                          ('max_yaw_rate_rad_s',.05,.5),('input_ttl_ms',50,500)]:
+                          ('max_yaw_rate_rad_s',.05,.5),('input_ttl_ms',50,INPUT_TTL_MAX_MS)]:
         value = candidate[key]
         if type(value) not in (float,int) or not math.isfinite(value) or not low <= value <= high:
             raise ValueError(key+'超出允许范围')

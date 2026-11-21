@@ -859,6 +859,14 @@
                 "enum": [
                   "m"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -898,6 +906,14 @@
                 "enum": [
                   "m/s"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -930,6 +946,14 @@
                   "INVALID",
                   "NOT_CONNECTED"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -969,6 +993,14 @@
                 "enum": [
                   "rad/s"
                 ]
+              },
+              "age_ms": {
+                "type": "number",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -1046,7 +1078,127 @@
             }
           },
           "sensors": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "local_position_velocity": {
+                "type": "object",
+                "properties": {
+                  "age_ms": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stale_after_ms": {
+                    "type": "integer",
+                    "nullable": true
+                  }
+                }
+              },
+              "gnss_local_position": {
+                "type": "object",
+                "description": "启用GNSS误差仿真时提供米制局部坐标及样本年龄。",
+                "required": [
+                  "value",
+                  "source",
+                  "validity",
+                  "unit",
+                  "coordinate_frame",
+                  "age_ms",
+                  "reason"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "object",
+                    "nullable": true,
+                    "required": [
+                      "sequence",
+                      "simulation_time_s",
+                      "measured_at_unix_ms",
+                      "delivered_at_simulation_time_s",
+                      "position_m"
+                    ],
+                    "properties": {
+                      "sequence": {
+                        "type": "integer"
+                      },
+                      "simulation_time_s": {
+                        "type": "number"
+                      },
+                      "measured_at_unix_ms": {
+                        "type": "number"
+                      },
+                      "delivered_at_simulation_time_s": {
+                        "type": "number"
+                      },
+                      "position_m": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "SIM_GNSS"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "m"
+                    ]
+                  },
+                  "coordinate_frame": {
+                    "type": "string",
+                    "enum": [
+                      "SIM_WORLD_X_FORWARD_Y_LEFT_Z_UP"
+                    ]
+                  },
+                  "validity": {
+                    "type": "string",
+                    "enum": [
+                      "VALID",
+                      "STALE",
+                      "INVALID",
+                      "NOT_CONNECTED"
+                    ]
+                  },
+                  "age_ms": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stale_after_ms": {
+                    "type": "number"
+                  },
+                  "latency_ms": {
+                    "type": "number"
+                  },
+                  "rate_hz": {
+                    "type": "integer"
+                  },
+                  "packet_sequence": {
+                    "type": "integer"
+                  },
+                  "lost_packets": {
+                    "type": "integer"
+                  },
+                  "pending_samples": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
           },
           "task": {
             "type": "object"
@@ -1088,8 +1240,78 @@
               },
               "lease_required": {
                 "type": "boolean"
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "awaiting_neutral": {
+                "type": "boolean"
+              },
+              "epoch_reason": {
+                "type": "string",
+                "nullable": true,
+                "description": "推进该控制轮次的原因"
+              },
+              "last_applied": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "control_epoch": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "intent_sequence": {
+                    "type": "integer"
+                  },
+                  "command_sequence": {
+                    "type": "integer"
+                  }
+                }
               }
             }
+          },
+          "protection": {
+            "type": "object",
+            "properties": {
+              "latched": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "recovery": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "blockers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ALTITUDE",
+                        "RADIUS",
+                        "SPEED"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "protection_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "target_yaw_rad": {
+            "type": "number",
+            "nullable": true
+          },
+          "environment": {
+            "type": "object",
+            "nullable": true
           }
         }
       },

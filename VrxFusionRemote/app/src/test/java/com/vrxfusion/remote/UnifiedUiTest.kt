@@ -48,7 +48,7 @@ class UnifiedUiTest {
         } } }
         rule.onNodeWithText("alpha").performClick()
         rule.onNodeWithText("sim-drone-1").assertExists(); rule.onNodeWithText("sim-drone-3").assertDoesNotExist()
-        rule.onAllNodesWithText("模拟测量 · GNSS未接入 · 电量未接入").assertCountEquals(2)
+        rule.onAllNodesWithText("模拟测量 · GNSS未知 · 电量未知").assertCountEquals(2)
         save("unified-fleet-group")
         rule.onNodeWithText("全部成员").performScrollTo().performClick()
         rule.onNodeWithText("sim-drone-3").assertExists()

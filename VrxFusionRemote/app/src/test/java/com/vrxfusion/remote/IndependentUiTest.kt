@@ -42,11 +42,12 @@ class IndependentUiTest {
     }
     @Test fun cockpitKeepsThreeCoordinatesAndSelfVisibleThroughFocusChange() {
         val s=state(); val own=s.members.single {it.is_self}.displayOver(RotorState(selected_source="app"))
-        rule.setContent {VrxTheme {FlightCockpit(own,emptyList(),flightNotice(own,true,true,false,LinkPhase.READY,false,false,true,null),
-            true,true,25.0,true,true,fleetMembers=s.members,selfDeviceId="sim-drone-2",memberFresh={true})}}
+        rule.setContent {VrxTheme {FlightCockpit(own,emptyList(),cockpitTestControl(flightNotice(own,true,true,false,LinkPhase.READY,false,false,true,null)),
+            true,true,25.0,fleetMembers=s.members,selfDeviceId="sim-drone-2",memberFresh={true})}}
         save("independent-pilot2-initial")
         s.members.forEach {rule.onNodeWithTag("fleet-coordinate-${it.device_id}",useUnmergedTree=true).assertIsDisplayed()}
-        rule.onNodeWithText(aircraftCoordinateText(s.members[1],"sim-drone-2",true)).assertExists()
+        rule.onNodeWithText("2本机 X2.0 Y0.0").assertExists()
+        rule.onNodeWithTag("altitude-readout").assertIsDisplayed()
         val before=rule.onNodeWithTag("position-panel").fetchSemanticsNode().boundsInRoot
         save("independent-pilot2-landscape")
         rule.onNodeWithTag("position-panel").performClick()
@@ -58,8 +59,8 @@ class IndependentUiTest {
     fun portraitCockpitKeepsOtherAircraftStaleWithoutHidingSelf() {
         val s=state("pilot-1")
         val own=s.members.first().displayOver(RotorState(selected_source="app"))
-        rule.setContent {VrxTheme {FlightCockpit(own,emptyList(),flightNotice(own,true,true,false,LinkPhase.READY,false,false,true,null),
-            true,false,25.0,true,true,fleetMembers=s.members,selfDeviceId="sim-drone-1",memberFresh={it.device_id!="sim-drone-3"})}}
+        rule.setContent {VrxTheme {FlightCockpit(own,emptyList(),cockpitTestControl(flightNotice(own,true,true,false,LinkPhase.READY,false,false,true,null)),
+            true,false,25.0,fleetMembers=s.members,selfDeviceId="sim-drone-1",memberFresh={it.device_id!="sim-drone-3"})}}
         s.members.forEach {rule.onNodeWithTag("fleet-coordinate-${it.device_id}",useUnmergedTree=true).assertIsDisplayed()}
         rule.onNodeWithText("3 · 位置失效",useUnmergedTree=true).assertIsDisplayed()
         save("independent-pilot1-portrait")

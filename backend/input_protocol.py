@@ -1,10 +1,10 @@
 """供应商SDK输出的规范化协议；不实现指环感知或语音识别算法。"""
-import math
 import unicodedata
 
 SEMANTICS = ('forward','backward','left','right','up','down','turn_left','turn_right',
              'hover','stop','protect','takeoff','land','return_home')
 SUPPORTED = SEMANTICS[:11]
+VOICE_SAFETY_PATHS = {'stop':'/api/stop','hover':'/api/stop','protect':'/api/protect'}
 DEFAULT_POLICY = {
     'min_confidence': .8,
     'dangerous_actions': ['down','takeoff','land','return_home'],
@@ -18,7 +18,8 @@ DEFAULT_POLICY = {
 
 
 def finite(value, name, low, high):
-    if type(value) not in (int,float) or not math.isfinite(value) or not low<=value<=high:
+    # 范围比较也会拒绝非有限值，并避免超大整数在浮点转换时溢出。
+    if type(value) not in (int,float) or not low<=value<=high:
         raise ValueError(name+'数值或范围无效')
     return value
 

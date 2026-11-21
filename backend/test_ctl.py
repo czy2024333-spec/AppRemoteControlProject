@@ -6,8 +6,11 @@ import time
 import unittest
 import urllib.request
 import uuid
-from app_server import DEMO_TOKENS, SimulationService, make_server
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
+from app_server import APIError, DEMO_TOKENS, SimulationService, make_server
 from client import ClientError, SourceClient
+from runtime_info import COMMAND_QUEUE_LIMIT, PROTECT_QUEUE_RESERVE, STOP_QUEUE_RESERVE
 from simulation_core import SimulationCore
 
 
@@ -285,6 +288,31 @@ class DeterministicTests(unittest.TestCase):
             self.assertIsNone(self.service.state()['active_source'])
         finally:
             self.service.close()
+
+    def test_queue_reserves_protection_capacity_and_rejects_overflow(self):
+        # 模拟消费者暂未取件。多个生产者同时提交，仍只能使用各自允许的容量。
+        real_event = threading.Event
+        class ReadyEvent(real_event):
+            def wait(self, timeout=None):
+                return False if timeout==2 else super().wait(timeout)
+
+        def submit(path):
+            try:
+                self.service.submit(path,{},'app')
+                self.fail('消费者尚未取件，不应返回执行成功')
+            except APIError as exc:
+                return exc.code
+
+        with ThreadPoolExecutor(max_workers=8) as pool, patch('app_server.threading.Event',ReadyEvent):
+            for path, limit in (('/api/input',COMMAND_QUEUE_LIMIT),('/api/stop',STOP_QUEUE_RESERVE),
+                                ('/api/protect',PROTECT_QUEUE_RESERVE)):
+                results = list(pool.map(submit,[path]*(limit+4)))
+                self.assertEqual(results.count('ACK_TIMEOUT'),limit)
+                self.assertEqual(results.count('QUEUE_FULL'),4)
+                if path=='/api/input':
+                    self.assertEqual(submit('/api/cancel'),'QUEUE_FULL')
+        self.assertEqual(self.service.commands.qsize(),COMMAND_QUEUE_LIMIT+STOP_QUEUE_RESERVE+PROTECT_QUEUE_RESERVE)
+        self.assertEqual(self.service.commands.get_nowait()[2]['path'],'/api/protect')
 
     def test_configuration_persists_and_old_session_cannot_replay(self):
         from pathlib import Path

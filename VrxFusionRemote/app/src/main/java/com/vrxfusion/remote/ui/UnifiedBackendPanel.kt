@@ -10,6 +10,7 @@ import com.vrxfusion.remote.MainViewModel
 import com.vrxfusion.remote.unified.*
 import com.vrxfusion.remote.ui.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonNull
 
 /** 连接配置和设备目录已统一至管理页；此处只保留原命令回执及查询入口。 */
 @Composable
@@ -31,13 +32,20 @@ fun CommandReceiptPanel(vm: MainViewModel) {
 
 fun UnifiedDeviceState.qualityText(): String {
     val local=sensors["local_position_velocity"]
-    val sensor=when {
-        local?.value==null || local.validity=="NOT_CONNECTED" -> "本地测量未接入"
-        local.validity!="VALID" -> "本地测量失效"
-        local.source=="SIM_MEASUREMENT" -> "模拟测量"
-        else -> "本地测量 ${local.source}"
-    }
-    val batteryLabel=if (battery.value==null || battery.validity!="VALID") "电量未接入" else "电量${battery.source}"
-    val gnssLabel=if (gnss.value==null || gnss.validity!="VALID") "GNSS未接入" else "GNSS${gnss.source}"
-    return "$sensor · $gnssLabel · $batteryLabel"
+    val sensor = local.qualityLabel("本地测量", simulated = "模拟测量")
+    return "$sensor · ${gnss.qualityLabel("GNSS")} · ${battery.qualityLabel("电量")}"
+}
+
+private val unspecifiedMeasurement = OptionalMeasurement()
+
+/** 缺字段和默认测量反序列化结果相同，只展示能够从现有数据确认的状态。 */
+private fun OptionalMeasurement?.qualityLabel(name: String, simulated: String = "${name}模拟"): String = when {
+    this == null || this == unspecifiedMeasurement -> "${name}未知"
+    validity == "NOT_CONNECTED" -> "${name}未接入"
+    validity == "STALE" || validity == "EXPIRED" -> "${name}过期"
+    validity == "INVALID" -> "${name}失效"
+    validity != "VALID" || value == null || value == JsonNull -> "${name}未知"
+    source.startsWith("SIM_") -> simulated
+    source == "UNKNOWN" || source.isBlank() -> "${name}来源未知"
+    else -> "$name $source"
 }

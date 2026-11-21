@@ -83,6 +83,7 @@ class BoundaryTests(unittest.TestCase):
         core._state['x'][2] = .36
         core._state['v'][2] = -.2
         core.protect('ALTITUDE_STATE_LIMIT')
+        self.assertEqual(core.boundary_recovery()['blockers'],['SPEED'])
         with self.assertRaises(BoundaryRecoveryPending):
             core.resume(neutral_confirmed=True)
         self.assertEqual(core.get_state()['mode'], 'PROTECTED')

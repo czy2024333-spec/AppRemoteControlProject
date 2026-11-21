@@ -16,7 +16,7 @@ from cluster_member import ManagedMember, validate_member
 
 MEMBER_PATHS = {'/api/session','/api/heartbeat','/api/switch','/api/adaptive-switch',
     '/api/neutral','/api/control','/api/input','/api/stop','/api/protect','/api/resume',
-    '/api/cancel','/api/disconnect','/api/config','/api/ring-event','/api/voice-result',
+    '/api/cancel','/api/disconnect','/api/config','/api/params','/api/ring-event','/api/voice-result',
     '/api/voice','/api/confirm'}
 
 

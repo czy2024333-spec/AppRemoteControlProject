@@ -785,6 +785,121 @@
           "control"
         ],
         "properties": {
+          "dynamics_params": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "mass_kg": {
+                "type": "number",
+                "minimum": 0.005,
+                "maximum": 50.0
+              },
+              "inertia_kg_m2": {
+                "type": "object",
+                "properties": {
+                  "Ixx": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  },
+                  "Iyy": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  },
+                  "Izz": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  }
+                }
+              },
+              "power": {
+                "type": "object",
+                "properties": {
+                  "max_thrust_n": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 500.0
+                  },
+                  "motor_time_constant_s": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 1.0
+                  }
+                }
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "mass_kg": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 10.0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "min_altitude_m": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 5.0
+                  },
+                  "max_altitude_m": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 50.0
+                  },
+                  "max_horizontal_speed_m_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 10.0
+                  },
+                  "max_vertical_speed_m_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 5.0
+                  },
+                  "max_yaw_rate_rad_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 6.0
+                  },
+                  "max_reference_acceleration_m_s2": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 20.0
+                  }
+                }
+              }
+            }
+          },
+          "dynamics_params_version": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1
+          },
+          "dynamics_params_origin": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "BASELINE",
+              "FILE",
+              "MEMORY"
+            ]
+          },
+          "effective_control_limits": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
           "contract_version": {
             "type": "string",
             "enum": [

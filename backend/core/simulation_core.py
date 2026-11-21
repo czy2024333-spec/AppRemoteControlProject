@@ -35,8 +35,9 @@ class CoreLimits:
 class SimulationCore:
     """固定步长、每实例独立状态；世界系三轴速度与偏航输入，底层为六自由度动力学。"""
 
-    def __init__(self, config=None, limits=None):
+    def __init__(self, config=None, limits=None, physics=None):
         check_version()
+        self._physics = copy.deepcopy(physics)
         self.config = copy.deepcopy(load_config(config or ROOT / "lab_config.json"))
         if self.config["motor_noise_rad_s"] != 0:
             raise ValueError("最小核心只支持无噪声；避免RotorPy全局随机源造成实例耦合")
@@ -49,7 +50,7 @@ class SimulationCore:
 
     def reset(self):
         # 【初始化】每实例创建独立模型和控制器；起点已在空中平衡，未模拟地面起飞。
-        self.vehicle, self.controller, _, self.params, _ = make_components(self.config, "hover")
+        self.vehicle, self.controller, _, self.params, _ = make_components(self.config, "hover", self._physics)
         self._state = copy.deepcopy(self.vehicle.initial_state)
         self._target = self._state["x"].copy()
         self._origin_xy = self._target[:2].copy()
@@ -69,6 +70,34 @@ class SimulationCore:
     @property
     def time_s(self):
         return self._ticks * self.dt
+
+    def baseline_physics(self):
+        """返回参数接口使用的当前机型数值，质量已包含本实例的mass_scale。"""
+        p = self.params
+        return dict(mass_kg=float(p["mass"]), inertia_kg_m2={k:float(p[k]) for k in ("Ixx","Iyy","Izz")},
+            power=dict(max_thrust_n=float(p["num_rotors"]*p["k_eta"]*p["rotor_speed_max"]**2),
+                       motor_time_constant_s=float(p["tau_m"])),
+            payload=dict(mass_kg=0., enabled=False),
+            limits={k:getattr(self.limits,k) for k in ("min_altitude_m","max_altitude_m",
+                "max_vertical_speed_m_s","max_horizontal_speed_m_s","max_yaw_rate_rad_s",
+                "max_reference_acceleration_m_s2")})
+
+    def prepare_physics(self, physics):
+        """先独立构建机体和控制器，构建失败时当前实例尚未改变。"""
+        settings = copy.deepcopy(physics)
+        vehicle, controller, _, params, hover = make_components(self.config, "hover", settings)
+        return settings, vehicle, controller, params, hover
+
+    def apply_physics(self, prepared):
+        """提交已构建的模型，保留步号、位置姿态、速度、风场、边界原点与保护状态。"""
+        self._physics, self.vehicle, self.controller, self.params, hover = prepared
+        # 电机转速按新模型的平衡转速初始化，机体运动状态连续。
+        self._state["rotor_speeds"] = np.full(self.params["num_rotors"], hover)
+        self._compensation = np.zeros(3)
+
+    def set_physics(self, physics):
+        self.apply_physics(self.prepare_physics(physics))
+        return self.get_state()
 
     def set_control(self, vertical_speed_m_s, ttl_s):
         """兼容第一阶段升降入口，同时将水平与偏航输入归零。"""

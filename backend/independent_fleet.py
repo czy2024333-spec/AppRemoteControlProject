@@ -6,6 +6,7 @@ from pathlib import Path
 import time
 import threading
 import uuid
+import dynamics_params
 from app_server import APIError, DEMO_TOKENS, safety_action_path
 from async_audit import AsyncAudit
 from cluster_manager import MEMBER_PATHS
@@ -210,6 +211,7 @@ class IndependentFleet:
                 device_bound_legacy_write=True,directory=True,unified_state=True,unified_receipts=True,
                 ue_video=False,ue_state_stream=True,formal_user_roles=False,logs_query=True,logs_export=True,
                 state_replay=True,replay_export=True,
+                dynamics_params_read=True,dynamics_params_edit=True,
                 hud_state_metadata=True,sse_comment_heartbeat=True,sse_resume=True,sse_focus=True,
                 state_publisher_health=True),
             control_policy=dict(default_frame='WORLD',axes_order=['X','Y','Z','YAW'],
@@ -228,6 +230,7 @@ class IndependentFleet:
                 logs='/api/v1/logs',logs_export='/api/v1/logs/export',
                 replay_frames='/api/v1/replay/frames',replay_export='/api/v1/replay/export',
                 ue_events='/api/v1/ue/events',
+                params='/api/v1/devices/{device_id}/params',
                 control_prefix='/api/v1/devices/{device_id}'))
 
     def request(self, identity, name, path, body):
@@ -269,6 +272,9 @@ class IndependentFleet:
     def command_state(self, identity, name, source, command_id):
         self.authorize_write(identity, name)
         return self._service(name).command_state(source,command_id,identity['source'])
+
+    def params(self, identity, name):
+        return dynamics_params.view(self.member_state(name,copy_state=False))
 
     def logs(self, identity, params):
         # 日志是全机审计证据，观察端同样可读，与 state/events 的共享观察口径一致。

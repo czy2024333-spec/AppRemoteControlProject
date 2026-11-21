@@ -18,6 +18,21 @@ def write(path,value):
 
 def add_hud_state_fields(state):
     fields = state['properties']
+    # 参数字段可选，旧契约样例也可继续读取；新状态另给出实际有效的控制限速。
+    bounded = lambda low,high: dict(type='number',minimum=low,maximum=high)
+    fields.update(dynamics_params=dict(type='object',nullable=True,properties=dict(
+        mass_kg=bounded(.005,50.),
+        inertia_kg_m2=dict(type='object',properties={k:bounded(1e-7,1.) for k in ('Ixx','Iyy','Izz')}),
+        power=dict(type='object',properties=dict(max_thrust_n=bounded(.05,500.),
+            motor_time_constant_s=bounded(.001,1.))),
+        payload=dict(type='object',properties=dict(mass_kg=bounded(0.,10.),enabled=dict(type='boolean'))),
+        limits=dict(type='object',properties=dict(min_altitude_m=bounded(.001,5.),
+            max_altitude_m=bounded(.5,50.),max_horizontal_speed_m_s=bounded(.05,10.),
+            max_vertical_speed_m_s=bounded(.05,5.),max_yaw_rate_rad_s=bounded(.05,6.),
+            max_reference_acceleration_m_s2=bounded(.05,20.))))),
+        dynamics_params_version=dict(type='integer',nullable=True,minimum=1),
+        dynamics_params_origin=dict(type='string',nullable=True,enum=['BASELINE','FILE','MEMORY']),
+        effective_control_limits=dict(type='object',nullable=True,additionalProperties=dict(type='number')))
     freshness = dict(age_ms=dict(type='number',nullable=True),reason=dict(type='string',nullable=True))
     for name in ('position','velocity','attitude','angular_velocity'):
         fields[name]['properties'].update(freshness)

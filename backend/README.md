@@ -23,6 +23,7 @@ python run_backend.py --mode independent --host 0.0.0.0 --port 8765
 | app_server.py、cluster_member.py | 每架独立执行器、会话、TTL、epoch 与保护 |
 | async_audit.py | 有界异步审计及失败处理 |
 | state_replay.py、ue_link_check.py | 三机状态录制、历史查询导出和 UE 数据联调 |
+| dynamics_params.py | 逐机动力学参数校验、原子保存和版本恢复 |
 | core/simulation_core.py | 三维动力学、运动与边界保护 |
 | cluster_config.json | 三实例位置、控制、传感器配置 |
 | independent_credentials.json | 公开的逐设备开发凭据样例 |
@@ -42,6 +43,8 @@ python run_backend.py --mode independent --host 0.0.0.0 --port 8765
 - [后端优化清单自检进度](后端优化清单自检进度.md) · [第四轮自检](后端第四轮自检.md)
 - [当前三机接口](前端对接_三机独立操控.md) · [OpenAPI](openapi_independent.json)
 - [状态回放与 UE 接口整合](后端整合说明_回放与UE_20261121.md) · [局部 GNSS 模拟](GNSS误差模拟_初步实现.md)
+- [动力学参数合并评审与修改方向](动力学参数修改方向.md)
+- [后端方案集中评审记录](../docs/reviews/后端方案评审记录.md)
 - [完整运行、Token 与测试说明](README_v0.9.md)
 - [原交付验证报告](验证报告_v0.9.md) · [协作仓库验证摘要](https://github.com/czy2024333-spec/AppRemoteControlProject/blob/4dd149a6bd6b541fe7b5b16292180688affc4735/docs/validation/README.md)
 

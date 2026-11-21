@@ -1,0 +1,141 @@
+{
+  "review_date": "2026-11-21",
+  "timezone": "Asia/Taipei",
+  "status": "draft_review_with_known_issues",
+  "base_commit": "2d129c627901d5541493fee2ba8c46d78b020a35",
+  "review_branch": "review/backend-proposals",
+  "source_bundle_sha256": "a8414155c2bef1ef6ae668b29461004f2341ef844faf26af127ac92ae1fd6faf",
+  "scope": "本机 Windows/Python 回归与短时回环负载；不代表物理标定或手机局域网验收通过。",
+  "test_results": {
+    "backend": {
+      "run": 202,
+      "passed": 202,
+      "failed": 0
+    },
+    "focused_params_gnss_replay_ue": {
+      "run": 48,
+      "passed": 48,
+      "failed": 0
+    },
+    "dynamics": {
+      "run": 27,
+      "passed": 26,
+      "skipped": 1,
+      "skip": "test_lab.Day1Tests.test_finished_run_summaries 需要显式启用历史产物检查并预先生成对应报告。"
+    }
+  },
+  "mixed_load": {
+    "passed": true,
+    "duration_s": 30,
+    "parameter_profiles": [
+      {
+        "mass_kg": 0.04,
+        "power": {
+          "max_thrust_n": 1.0
+        }
+      },
+      {
+        "payload": {
+          "enabled": true,
+          "mass_kg": 0.005
+        }
+      },
+      {
+        "limits": {
+          "max_horizontal_speed_m_s": 0.3
+        }
+      }
+    ],
+    "control_ack_count": 1782,
+    "control_p95_ms": [
+      7.106700002623256,
+      7.4826999989454634,
+      7.3198000027332455
+    ],
+    "app_sse_hz": [
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0,
+      25.0
+    ],
+    "ue_hz": 24.99,
+    "ue_parsed_members": 2250,
+    "ue_dropped_members": 0,
+    "replay_queries": 9,
+    "replay_exports": 9,
+    "replay_frames": 302,
+    "replay_records": 906,
+    "migration_records": 906,
+    "replay_average_hz": 9.993488688856353,
+    "final_versions": {
+      "sim-drone-1": 2,
+      "sim-drone-2": 2,
+      "sim-drone-3": 2
+    }
+  },
+  "inertia_only_probe": {
+    "issue": "DYN-001",
+    "status": "reproduced_unfixed",
+    "change": {
+      "inertia_kg_m2.Izz_multiplier": 1.05
+    },
+    "before": {
+      "mass": 0.03,
+      "Ixx": 1.43e-05,
+      "Iyy": 1.43e-05,
+      "Izz": 2.89e-05,
+      "k_eta": 2.3e-08,
+      "k_m": 7.8e-10,
+      "rotor_speed_max": 2500.0,
+      "tau_m": 0.072
+    },
+    "candidate": {
+      "mass": 0.03,
+      "Ixx": 1.43e-05,
+      "Iyy": 1.43e-05,
+      "Izz": 3.0345e-05,
+      "k_eta": 7.3575e-08,
+      "k_m": 2.495152173913043e-09,
+      "rotor_speed_max": 1397.7799007842248,
+      "tau_m": 0.072
+    },
+    "core_unchanged_after_prepare": true,
+    "python_version": "3.13.14"
+  },
+  "open_issues": {
+    "DYN-001": "已复现未修正：仅修改惯量会重算电机参数。",
+    "DYN-002": "待决定：在线编辑质量和惯量的范围。当前代码仍支持 HOLD 写入。",
+    "DYN-003": "待验证：机型参数的物理标定与通用生成假设。",
+    "DYN-004": "待完善：doctor 对各机持久化参数文件的覆盖。",
+    "DYN-005": "待完善：回放样本直接关联物理参数版本。",
+    "DYN-006": "待设计：实际机体参数与控制器估计参数的区分。"
+  },
+  "source_code_sha256": {
+    "backend/app_server.py": "3396b9a554e89cc1b1c1b7db6bb8f5a9d4eba00e1097ad1fb256c9bb1d33f616",
+    "backend/build_unified_contract.py": "be62952158dcf1f7bf74b83160dbe8fcb5721ffad59866a77b75b3167a65bb8c",
+    "backend/cluster_manager.py": "518d4886e1041b320b4f76a7ec6b01e15633d5aa422b74a10335f87cc041eb60",
+    "backend/cluster_member.py": "87e7ee16bf6274b0e42c948da982f67ed2b35cc38ff4ca2fdca8554056ad06a8",
+    "backend/dynamics_params.py": "c3e9d2b90b7ae3ed5b324867fce9a6b4c51f4756d648d0bfd60190f559e7d976",
+    "backend/independent_fleet.py": "5fd41b278fe37288ceefa11a57e0cb7a6aca3e965419ce34189fb27ca16e0611",
+    "backend/independent_server.py": "2f4040d92379b88ec13f16cddfcf3fa85bd8f1363a3d0f367d96518bfbf78e8e",
+    "backend/openapi_independent.json": "092a92f48252ffd0259b3194103f107cb76992dcf19b4e1aaf1134c5a4ca33c8",
+    "backend/openapi_unified.json": "a752e495096dfec469600dfeb2e0e9a21cba03de3e672913e949720cd046248c",
+    "backend/run_checks.py": "c7033764550e398268b95626ed510c4cdc6757f656186340e96acf6606a46c70",
+    "backend/test_params_api.py": "6c36bec5aa6fb03c2cfffe83b287e32376034829f2c337b6f095f3a06fbca968",
+    "backend/unified_contract.py": "1e533dd5c97461734e4a129cc8628a7dc5258c937072a46962b9c7a479255adc",
+    "backend/unified_server.py": "0f3658cfc4bd60839c9e7e7e4f0952a99255113f3a21390a4da63a89973928ee",
+    "backend/core/run_lab.py": "4d6bb0dadb2c2f86c02614604845d6048ba6883c11227942176c5a4a50a78da6",
+    "backend/core/simulation_core.py": "87cd846d48ed682392a87a3b5312093775fc434622325447c7845252d8a4b8bb"
+  },
+  "local_evidence_sha256": {
+    "backend-final.txt": "6bbe6086f7eb8660147860d3c4e8213f9cb4df90bd2e68d3eb9559bdf36df153",
+    "dynamics.txt": "c77bb080472e55f80356cf41ca5eaee6753dec8dcd2ce1c27a3e95b816637bb0",
+    "focused.txt": "74f698f6accc140d69f2400dd505b5833ee39ca2e999a1fb39b70859622c38f2",
+    "summary.json": "fd3dce301e653d9f10f3cff89f49422c9fe0d1d4726a43065b83507d2cd51a8f"
+  },
+  "evidence_policy": "仅发布精简统计和复现参数；运行原始日志、JSONL、实际凭据及二进制均未纳入本轮。"
+}

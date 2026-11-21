@@ -12,6 +12,646 @@
     }
   ],
   "paths": {
+    "/api/v1/devices/{device_id}/params": {
+      "get": {
+        "summary": "查询指定飞机的参数与有效限速",
+        "description": "授权的操纵端和观察端均可读取。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "参数、版本、来源和有效限速",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DynamicsParamsView"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "更新指定飞机的动力学参数",
+        "description": "仅绑定设备的APP操纵来源可写，须已有会话、有效轮次和HOLD状态。params_version用于乐观校验，command_id用于幂等。成功后推进轮次并清除来源选择，需重新切换归中。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "params_version": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "additionalProperties": false,
+                        "properties": {
+                          "mass_kg": {
+                            "type": "number",
+                            "minimum": 0.005,
+                            "maximum": 50.0
+                          },
+                          "inertia_kg_m2": {
+                            "type": "object",
+                            "properties": {
+                              "Ixx": {
+                                "type": "number",
+                                "minimum": 1e-07,
+                                "maximum": 1.0
+                              },
+                              "Iyy": {
+                                "type": "number",
+                                "minimum": 1e-07,
+                                "maximum": 1.0
+                              },
+                              "Izz": {
+                                "type": "number",
+                                "minimum": 1e-07,
+                                "maximum": 1.0
+                              }
+                            }
+                          },
+                          "power": {
+                            "type": "object",
+                            "properties": {
+                              "max_thrust_n": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 500.0
+                              },
+                              "motor_time_constant_s": {
+                                "type": "number",
+                                "minimum": 0.001,
+                                "maximum": 1.0
+                              }
+                            }
+                          },
+                          "payload": {
+                            "type": "object",
+                            "properties": {
+                              "mass_kg": {
+                                "type": "number",
+                                "minimum": 0.0,
+                                "maximum": 10.0
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "limits": {
+                            "type": "object",
+                            "properties": {
+                              "min_altitude_m": {
+                                "type": "number",
+                                "minimum": 0.001,
+                                "maximum": 5.0
+                              },
+                              "max_altitude_m": {
+                                "type": "number",
+                                "minimum": 0.5,
+                                "maximum": 50.0
+                              },
+                              "max_horizontal_speed_m_s": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 10.0
+                              },
+                              "max_vertical_speed_m_s": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 5.0
+                              },
+                              "max_yaw_rate_rad_s": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 6.0
+                              },
+                              "max_reference_acceleration_m_s2": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 20.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "command_id",
+                      "params_version",
+                      "patch"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/params": {
+      "get": {
+        "summary": "查询指定飞机的参数与有效限速",
+        "description": "授权的操纵端和观察端均可读取。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "参数、版本、来源和有效限速",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DynamicsParamsView"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "更新指定飞机的动力学参数",
+        "description": "仅绑定设备的APP操纵来源可写，须已有会话、有效轮次和HOLD状态。params_version用于乐观校验，command_id用于幂等。成功后推进轮次并清除来源选择，需重新切换归中。",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "sourceToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MemberEnvelope"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "params_version": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "additionalProperties": false,
+                        "properties": {
+                          "mass_kg": {
+                            "type": "number",
+                            "minimum": 0.005,
+                            "maximum": 50.0
+                          },
+                          "inertia_kg_m2": {
+                            "type": "object",
+                            "properties": {
+                              "Ixx": {
+                                "type": "number",
+                                "minimum": 1e-07,
+                                "maximum": 1.0
+                              },
+                              "Iyy": {
+                                "type": "number",
+                                "minimum": 1e-07,
+                                "maximum": 1.0
+                              },
+                              "Izz": {
+                                "type": "number",
+                                "minimum": 1e-07,
+                                "maximum": 1.0
+                              }
+                            }
+                          },
+                          "power": {
+                            "type": "object",
+                            "properties": {
+                              "max_thrust_n": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 500.0
+                              },
+                              "motor_time_constant_s": {
+                                "type": "number",
+                                "minimum": 0.001,
+                                "maximum": 1.0
+                              }
+                            }
+                          },
+                          "payload": {
+                            "type": "object",
+                            "properties": {
+                              "mass_kg": {
+                                "type": "number",
+                                "minimum": 0.0,
+                                "maximum": 10.0
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "limits": {
+                            "type": "object",
+                            "properties": {
+                              "min_altitude_m": {
+                                "type": "number",
+                                "minimum": 0.001,
+                                "maximum": 5.0
+                              },
+                              "max_altitude_m": {
+                                "type": "number",
+                                "minimum": 0.5,
+                                "maximum": 50.0
+                              },
+                              "max_horizontal_speed_m_s": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 10.0
+                              },
+                              "max_vertical_speed_m_s": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 5.0
+                              },
+                              "max_yaw_rate_rad_s": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 6.0
+                              },
+                              "max_reference_acceleration_m_s2": {
+                                "type": "number",
+                                "minimum": 0.05,
+                                "maximum": 20.0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "command_id",
+                      "params_version",
+                      "patch"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "拒绝或不可用，保留原始错误码",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "成员处理结果，仍须检查receipt.phase；WAITING_NEUTRAL不代表可运动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data",
+                    "receipt",
+                    "request_id"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RawControlResult"
+                    },
+                    "receipt": {
+                      "$ref": "#/components/schemas/Receipt"
+                    },
+                    "request_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ue/events": {
       "get": {
         "summary": "UE CoreStateAccess 平铺集群状态SSE",
@@ -3787,6 +4427,136 @@
   },
   "components": {
     "schemas": {
+      "DynamicsParamsView": {
+        "type": "object",
+        "required": [
+          "device_id",
+          "params_version",
+          "dynamics_params"
+        ],
+        "properties": {
+          "device_id": {
+            "type": "string"
+          },
+          "boot_id": {
+            "type": "string"
+          },
+          "params_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "dynamics_params": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "mass_kg": {
+                "type": "number",
+                "minimum": 0.005,
+                "maximum": 50.0
+              },
+              "inertia_kg_m2": {
+                "type": "object",
+                "properties": {
+                  "Ixx": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  },
+                  "Iyy": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  },
+                  "Izz": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  }
+                }
+              },
+              "power": {
+                "type": "object",
+                "properties": {
+                  "max_thrust_n": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 500.0
+                  },
+                  "motor_time_constant_s": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 1.0
+                  }
+                }
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "mass_kg": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 10.0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "min_altitude_m": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 5.0
+                  },
+                  "max_altitude_m": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 50.0
+                  },
+                  "max_horizontal_speed_m_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 10.0
+                  },
+                  "max_vertical_speed_m_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 5.0
+                  },
+                  "max_yaw_rate_rad_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 6.0
+                  },
+                  "max_reference_acceleration_m_s2": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 20.0
+                  }
+                }
+              }
+            }
+          },
+          "dynamics_params_origin": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "BASELINE",
+              "FILE",
+              "MEMORY"
+            ]
+          },
+          "effective_control_limits": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "number"
+            }
+          }
+        }
+      },
       "ReplaySample": {
         "type": "object",
         "required": [
@@ -4030,6 +4800,121 @@
           "control"
         ],
         "properties": {
+          "dynamics_params": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "mass_kg": {
+                "type": "number",
+                "minimum": 0.005,
+                "maximum": 50.0
+              },
+              "inertia_kg_m2": {
+                "type": "object",
+                "properties": {
+                  "Ixx": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  },
+                  "Iyy": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  },
+                  "Izz": {
+                    "type": "number",
+                    "minimum": 1e-07,
+                    "maximum": 1.0
+                  }
+                }
+              },
+              "power": {
+                "type": "object",
+                "properties": {
+                  "max_thrust_n": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 500.0
+                  },
+                  "motor_time_constant_s": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 1.0
+                  }
+                }
+              },
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "mass_kg": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 10.0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "min_altitude_m": {
+                    "type": "number",
+                    "minimum": 0.001,
+                    "maximum": 5.0
+                  },
+                  "max_altitude_m": {
+                    "type": "number",
+                    "minimum": 0.5,
+                    "maximum": 50.0
+                  },
+                  "max_horizontal_speed_m_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 10.0
+                  },
+                  "max_vertical_speed_m_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 5.0
+                  },
+                  "max_yaw_rate_rad_s": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 6.0
+                  },
+                  "max_reference_acceleration_m_s2": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 20.0
+                  }
+                }
+              }
+            }
+          },
+          "dynamics_params_version": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1
+          },
+          "dynamics_params_origin": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "BASELINE",
+              "FILE",
+              "MEMORY"
+            ]
+          },
+          "effective_control_limits": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
           "contract_version": {
             "type": "string",
             "enum": [

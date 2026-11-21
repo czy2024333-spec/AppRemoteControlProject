@@ -9,7 +9,7 @@ KNOWN_ERROR_CODES = frozenset("""
     COMMAND_HISTORY_FULL COMMAND_ID_REUSED COMMAND_NOT_FOUND CONFIG_SAVE_FAILED CONFIG_VERSION_CONFLICT
     CONFIRMATION_REQUIRED CORE_REJECTED CORS_HEADERS_NOT_ALLOWED CORS_METHOD_NOT_ALLOWED
     DEPLOYMENT_MODE_MISMATCH DEVICE_ID_REUSED DISCONNECTED GROUP_NOT_FOUND HISTORY_FULL INVALID_CONFIG
-    INVALID_MEMBERS LOG_BUSY LOG_DATA_CORRUPT LOG_EXPORT_TOO_LARGE LOG_INDEX_BUILDING
+    INVALID_MEMBERS INVALID_PARAMS PARAMS_VERSION_CONFLICT PARAMS_SAVE_FAILED PARAM_OUT_OF_RANGE LOG_BUSY LOG_DATA_CORRUPT LOG_EXPORT_TOO_LARGE LOG_INDEX_BUILDING
     LOG_INDEX_UNAVAILABLE LOG_QUERY_TIMEOUT LOG_READ_FAILED LOG_SNAPSHOT_EXPIRED MEMBER_NOT_FOUND
     MODE_NOT_ALLOWED NOT_FOUND NO_PENDING_CONFIRMATION PROTECTED QUEUE_FULL REQUEST_ID_REUSED
     REQUEST_REJECTED REPLAY_RECORDING_FAILED RETIRED_INPUT SENSOR_CAPACITY_LIMIT STALE_CLUSTER_SEQUENCE STALE_DEVICE_EVENT
@@ -93,6 +93,7 @@ def device_descriptor(raw):
         coordinate_frame=COORDINATE_FRAME,
         capabilities=dict(motion=True,motion_axes=['X','Y','Z','YAW'],motion_frames=['WORLD','HEADING'],
             default_motion_frame='WORLD',normalized_input=True,velocity_setpoint=True,
+            dynamics_params=raw.get('dynamics_params') is not None,
             actions=['STOP','PROTECT','RESUME','HOVER'],takeoff=False,land=False,return_home=False,
             battery=False,gnss=False,gnss_local_simulation=raw.get('gnss_local_measurement') is not None,
             local_position_velocity_measurement=sensor.get('enabled',False),
@@ -103,7 +104,10 @@ def device_descriptor(raw):
         control_config_version=raw['config_version'],
         control_config_origin=raw.get('control_config_origin'),
         yaw_convention='CCW_FROM_WORLD_X_ABOUT_POSITIVE_Z',
+        effective_control_limits=copy.deepcopy(raw.get('effective_control_limits')),
+        dynamics_params_version=raw.get('dynamics_params_version'),
         routes=dict(state=f"/api/v1/devices/{raw['device_id']}/state",
+            params=f"/api/v1/devices/{raw['device_id']}/params",
             events=f"/api/v1/devices/{raw['device_id']}/events",
             legacy_control_prefix=f"/api/devices/{raw['device_id']}"))
 
@@ -117,7 +121,7 @@ def device_state(raw):
     if raw.get('gnss_local_measurement') is not None:
         sensors['gnss_local_position'] = gnss_local_channel(raw,online)
     freshness=dict(age_ms=raw.get('state_age_ms'),loss_reason=raw.get('loss_reason'))
-    return dict(contract_version=UNIFIED_PROTOCOL_VERSION,device_id=raw['device_id'],boot_id=raw['boot_id'],
+    result = dict(contract_version=UNIFIED_PROTOCOL_VERSION,device_id=raw['device_id'],boot_id=raw['boot_id'],
         sequence=raw['sequence'],server_time_unix_ms=raw['server_time_ms'],
         simulation_time_s=raw['simulation_time_s'],state_age_ms=raw.get('state_age_ms'),
         online=online,mode=raw['mode'],coordinate_frame=COORDINATE_FRAME,
@@ -143,6 +147,12 @@ def device_state(raw):
         protection_reason=raw.get('protection_reason'),target_yaw_rad=raw.get('target_yaw_rad'),
         environment=copy.deepcopy(raw.get('environment')),
         video=dict(source='UE',status='NOT_CONNECTED'))
+    if 'dynamics_params' in raw:
+        result.update(dynamics_params=copy.deepcopy(raw['dynamics_params']),
+            dynamics_params_version=raw['dynamics_params_version'],
+            dynamics_params_origin=raw['dynamics_params_origin'],
+            effective_control_limits=copy.deepcopy(raw['effective_control_limits']))
+    return result
 
 
 def selection_snapshot(selection,cluster_id):

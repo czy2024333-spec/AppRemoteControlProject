@@ -86,13 +86,39 @@ def load_config(path):
     return cfg
 
 
-def make_components(cfg, case):
+def matches_baseline_physics(physics, params):
+    """参数等于基准机型时沿用原电机常数，保证默认模型可复现。"""
+    mass = physics["mass_kg"] + (physics["payload"]["mass_kg"] if physics["payload"]["enabled"] else 0.)
+    thrust = params["num_rotors"] * params["k_eta"] * params["rotor_speed_max"] ** 2
+    return (math.isclose(mass, params["mass"], abs_tol=1e-12, rel_tol=0.)
+            and math.isclose(physics["power"]["max_thrust_n"], thrust, abs_tol=1e-9, rel_tol=0.)
+            and math.isclose(physics["power"]["motor_time_constant_s"], params["tau_m"], abs_tol=1e-12, rel_tol=0.)
+            and all(math.isclose(physics["inertia_kg_m2"][key], params[key], abs_tol=1e-15, rel_tol=0.)
+                    for key in ("Ixx", "Iyy", "Izz")))
+
+
+def make_components(cfg, case, physics=None):
     if case not in {"hover", "recovery"}:
         raise ValueError(f"未知工况: {case}")
     # 机体参数是物理模型，不是控制器增益。深复制防止修改官方全局对象。
     params = copy.deepcopy(quad_params)
     params["mass"] *= cfg["mass_scale"]
     params["motor_noise_std"] = cfg["motor_noise_rad_s"]
+    if physics is not None and not matches_baseline_physics(physics, params):
+        # 参数化模型按质量、负载和最大总推力重算电机系数，模型和控制器共用同一参数。
+        mass = physics["mass_kg"] + (physics["payload"]["mass_kg"] if physics["payload"]["enabled"] else 0.)
+        thrust = physics["power"]["max_thrust_n"]
+        if thrust < mass * 9.81 * 1.2:
+            raise ValueError("最大推力须至少达到总重量的1.2倍")
+        hover_omega = 1000.
+        top_omega = hover_omega * math.sqrt(thrust / (mass * 9.81))
+        if not hover_omega < top_omega <= 9000.:
+            raise ValueError("最大推力与质量组合超出模型范围")
+        eta = mass * 9.81 / (params["num_rotors"] * hover_omega ** 2)
+        params["k_m"] *= eta / params["k_eta"]
+        params.update(mass=mass, k_eta=eta, rotor_speed_max=top_omega,
+                      tau_m=physics["power"]["motor_time_constant_s"])
+        params.update(physics["inertia_kg_m2"])
     # 对称四旋翼近似：4*k_eta*omega_hover^2 = m*g；omega单位rad/s。
     omega_hover = math.sqrt(params["mass"] * 9.81 / (params["num_rotors"] * params["k_eta"]))
     if omega_hover >= params["rotor_speed_max"]:

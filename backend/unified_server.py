@@ -8,6 +8,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 from app_server import APIError, DEMO_TOKENS
+import dynamics_params
 from cluster_manager import ClusterManager, MEMBER_PATHS, SAFETY_PATHS
 from http_transport import JsonHandler, TransportError, strict_loads, validate_origins
 from runtime_info import IMPLEMENTATION_VERSION, UNIFIED_PROTOCOL_VERSION, identifier
@@ -117,6 +118,7 @@ def make_unified_server(manager,host='127.0.0.1',port=8765,allowed_origins=(),pr
                 elif len(parts)>=5 and parts[:3]==['api','v1','devices'] and not post:
                     name=identifier(parts[3])
                     if len(parts)==5 and parts[4]=='state': data=device_state(manager.member_state(name))
+                    elif len(parts)==5 and parts[4]=='params': data=dynamics_params.view(manager.member_state(name))
                     elif len(parts)==5 and parts[4]=='events': return self.stream(name,True)
                     elif len(parts)==7 and parts[4]=='commands':
                         data=receipt(manager.command_state(name,parts[5],parts[6],source),name,parts[6])

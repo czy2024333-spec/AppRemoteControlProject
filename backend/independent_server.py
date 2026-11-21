@@ -335,6 +335,8 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                     action = parts[4]
                     if not post and len(parts)==5 and action=='state':
                         data = fleet.view(identity,name)
+                    elif not post and len(parts)==5 and action=='params':
+                        data = fleet.params(identity,name)
                     elif not post and len(parts)==5 and action=='events':
                         return self.stream(identity,name)
                     elif not post and len(parts)==7 and action=='commands':
@@ -347,6 +349,8 @@ def make_independent_server(fleet, host='127.0.0.1', port=8765, allowed_origins=
                     name = identifier(parts[2])
                     if not post and len(parts)==4 and parts[3]=='state':
                         data = fleet.member_state(name)
+                    elif not post and len(parts)==4 and parts[3]=='params':
+                        data = fleet.params(identity,name)
                     elif not post and len(parts)==4 and parts[3]=='events':
                         return self.stream(identity,name,True)
                     elif not post and len(parts)==6 and parts[3]=='commands':

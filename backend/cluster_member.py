@@ -69,7 +69,8 @@ class ManagedMember(SimulationService):
         persisted = control_path.exists()
         if persisted:
             control = validate_control(json.loads(control_path.read_text(encoding='utf-8')))
-        super().__init__(core, tokens=tokens, config=control, config_path=control_path, audit_sink=audit_sink)
+        super().__init__(core, tokens=tokens, config=control, config_path=control_path, audit_sink=audit_sink,
+            dynamics_params_path=directory/'dynamics_params.json')
         self.control_config_origin = 'FILE' if persisted else 'REGISTRY'
         self.device_id = spec['device_id']
         self.audit_path = directory/'control_events.jsonl'

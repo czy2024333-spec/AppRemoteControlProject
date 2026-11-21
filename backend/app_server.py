@@ -1,6 +1,7 @@
 """用户主动切换、中立握手，单线程仲裁与三维仿真；原生客户端局域网接口。"""
 import argparse
 import copy
+import dataclasses
 import hashlib
 import hmac
 import itertools
@@ -21,6 +22,7 @@ from runtime_info import (CLUSTER_BARRIER_PATH, COMMAND_HISTORY_LIMIT, COMMAND_Q
     SAFETY_COMMAND_HISTORY_LIMIT, STATE_STREAM_TARGET_HZ, STOP_QUEUE_RESERVE, is_continuous)
 from control_config import CAPABILITIES, DEFAULT, update as update_config, validate as validate_config
 from input_protocol import SUPPORTED, VOICE_SAFETY_PATHS, voice_result, ring_event
+import dynamics_params
 
 CORE_DIR = Path(__file__).resolve().parent/'core'
 sys.path.insert(0, str(CORE_DIR))
@@ -84,7 +86,8 @@ def safety_action_path(path, body, source, policy):
 
 
 class SimulationService:
-    def __init__(self, core, tokens=None, config=None, config_path=None, audit_sink=None):
+    def __init__(self, core, tokens=None, config=None, config_path=None, audit_sink=None,
+                 dynamics_params_path=None):
         self.core = core
         # 独立多机模式注入异步审计；旧模式保留原有日志行为。
         self.audit_sink = audit_sink
@@ -97,6 +100,20 @@ class SimulationService:
         self.config_version = 1
         self.control_config_origin = 'REGISTRY'
         self.config_path = config_path
+        self.dynamics_params_path = Path(dynamics_params_path) if dynamics_params_path is not None else None
+        self.dynamics_params = dynamics_params.validate(self.core.baseline_physics())
+        self.dynamics_params_version = 1
+        self.dynamics_params_origin = 'BASELINE'
+        if self.dynamics_params_path is not None and self.dynamics_params_path.exists():
+            saved, self.dynamics_params_version = dynamics_params.load(self.dynamics_params_path)
+            limits = dataclasses.replace(self.core.limits, **saved['limits'])
+            if not limits.min_altitude_m <= self.core.get_state()['state']['x'][2] <= limits.max_altitude_m:
+                raise ValueError('启动高度不在保存的动力学参数范围内')
+            if any(saved[k] != self.dynamics_params[k] for k in ('mass_kg','inertia_kg_m2','power','payload')):
+                self.core.set_physics(saved)
+            self.core.limits = limits
+            self.dynamics_params = saved
+            self.dynamics_params_origin = 'FILE'
         self.boot_id = uuid.uuid4().hex
         self.audit_path = Path(__file__).resolve().parent/'results/control_events.jsonl'
         self.selected_source = None
@@ -159,6 +176,8 @@ class SimulationService:
             input_task_capabilities={'takeoff':False,'land':False,'return_home':False,'hover':True},
             hardware_acceptance='PENDING_REAL_HARDWARE_AND_SDK',
             config_version=self.config_version, control_config=self.config, capabilities=CAPABILITIES,
+            dynamics_params=self.dynamics_params, dynamics_params_version=self.dynamics_params_version,
+            dynamics_params_origin=self.dynamics_params_origin, effective_control_limits=self.motion_limits(),
             recent_events=self.events[-8:],
             recent_commands=[{k:v[k] for k in ('source','command_id','status','reason')}
                 for v in list(self.records.values())[-RECENT_COMMANDS_LIMIT:]],
@@ -170,6 +189,11 @@ class SimulationService:
             transition_reason=self.transition, filtered_yaw_rate_rad_s=self.filtered_yaw,
             sim_rate_hz=1/self.core.dt, state_stream_target_hz=STATE_STREAM_TARGET_HZ,
             voice_remaining_ms=max(0., (self.voice_end-time.monotonic())*1000) if self.voice_end else 0.)
+
+    def motion_limits(self):
+        # 摇杆映射与物理限幅使用同一有效上限，参数缩小时满杆也能产生合法指令。
+        return {name:min(self.config[name],getattr(self.core.limits,name)) for name in
+            ('max_horizontal_speed_m_s','max_vertical_speed_m_s','max_yaw_rate_rad_s')}
 
     def publish(self, raw=None):
         if raw is None:
@@ -265,7 +289,7 @@ class SimulationService:
             raise item['error']
         return item['result']
 
-    def new_epoch(self, reason, release=True):
+    def new_epoch(self, reason, release=True, *, audit_fields=None):
         # 停止、切换和断连同时撤销尚未确认的危险动作。
         for key in list(self.confirmations):
             self.finish_command(key,'CANCELLED',reason)
@@ -285,6 +309,8 @@ class SimulationService:
             self.filtered_yaw = 0.
         event = dict(reason=reason,server_time_ms=time.time()*1000,source=previous_source,
             device_id=self.device_id,boot_id=self.boot_id,simulation_time_s=self.core.time_s)
+        if audit_fields is not None:
+            event.update(audit_fields)
         self.events.append(event)
         self.events = self.events[-128:]
         # 失效原因持久化，便于联调复盘；日志不写Token和语音原始音频。
@@ -429,7 +455,7 @@ class SimulationService:
         ring_continuous = is_continuous(path,body) and path=='/api/ring-event'
         continuous = path in ('/api/control','/api/input','/api/heartbeat') or ring_continuous
         discrete = path in ('/api/switch','/api/adaptive-switch','/api/neutral','/api/voice',
-            '/api/stop','/api/protect','/api/resume','/api/cancel','/api/disconnect','/api/config',
+            '/api/stop','/api/protect','/api/resume','/api/cancel','/api/disconnect','/api/config','/api/params',
             '/api/ring-event','/api/voice-result','/api/confirm')
         discrete = discrete and not ring_continuous
         if not continuous and not discrete:
@@ -455,7 +481,10 @@ class SimulationService:
                 record = self.records[key]
                 if record['fingerprint']!=fingerprint:
                     raise APIError(409,'同一command_id被用于不同动作','COMMAND_ID_REUSED')
-                return dict(command_id=command_id,command_status=record['status'],idempotent_replay=True)
+                replay = dict(command_id=command_id,command_status=record['status'],idempotent_replay=True)
+                if 'params_version' in record:
+                    replay['params_version'] = record['params_version']
+                return replay
             if safety_path is None and session['regular_command_count']>=COMMAND_HISTORY_LIMIT:
                 raise APIError(503,'本会话离散命令历史已满，停止后重新建会话','COMMAND_HISTORY_FULL')
         seq, expires = self.envelope(item, require_epoch=path!='/api/heartbeat' and safety_path!='/api/protect')
@@ -486,6 +515,8 @@ class SimulationService:
         result = dict(accepted_command_sequence=seq)
         if key is not None:
             result.update(command_id=key[1],command_status=self.records[key]['status'],idempotent_replay=False)
+            if 'params_version' in self.records[key]:
+                result['params_version'] = self.records[key]['params_version']
         return result
 
     def axes(self, value):
@@ -590,6 +621,46 @@ class SimulationService:
                 self.core.protect(reason)
                 self.clear_selection(reason)
                 self.new_epoch(reason)
+        elif path == '/api/params':
+            self.operator(source)
+            if source != 'app':
+                raise APIError(403,'只有APP操纵来源可修改动力学参数','CAPABILITY_MISMATCH')
+            if self.core.get_state()['mode'] != 'HOLD' or self.pending_source is not None:
+                raise APIError(409,'参数只能在悬停且无待切换来源时修改','MODE_NOT_ALLOWED')
+            if type(body.get('params_version')) is not int or body['params_version'] != self.dynamics_params_version:
+                raise APIError(409,'动力学参数版本已变化','PARAMS_VERSION_CONFLICT')
+            try:
+                candidate = dynamics_params.update(self.dynamics_params,body.get('patch'))
+                new_limits = dataclasses.replace(self.core.limits,**candidate['limits'])
+                changed_physics = any(candidate[k] != self.dynamics_params[k]
+                    for k in ('mass_kg','inertia_kg_m2','power','payload'))
+                prepared = self.core.prepare_physics(candidate) if changed_physics else None
+            except ValueError as exc:
+                raise APIError(400,str(exc),'INVALID_PARAMS') from exc
+            current_z = self.core.get_state()['state']['x'][2]
+            initial_z = self.core.config['hover_position_m'][2]
+            if not all(new_limits.min_altitude_m <= z <= new_limits.max_altitude_m for z in (current_z,initial_z)):
+                raise APIError(409,'当前高度或启动高度不在新的高度范围内','PARAM_OUT_OF_RANGE')
+            if self.dynamics_params_path is not None:
+                try:
+                    dynamics_params.save(candidate,self.dynamics_params_path,self.dynamics_params_version+1)
+                except OSError as exc:
+                    raise APIError(503,'参数保存失败，当前参数仍有效','PARAMS_SAVE_FAILED') from exc
+            # 文件写入成功后才提交已构建的模型，失败请求不会改变状态、模型和版本。
+            if prepared is not None:
+                self.core.apply_physics(prepared)
+            previous_version = self.dynamics_params_version
+            changes = {k:dict(before=self.dynamics_params[k],after=candidate[k])
+                for k in candidate if candidate[k] != self.dynamics_params[k]}
+            self.core.limits = new_limits
+            self.core.stop()
+            self.dynamics_params = candidate
+            self.dynamics_params_version += 1
+            self.dynamics_params_origin = 'FILE' if self.dynamics_params_path is not None else 'MEMORY'
+            self.records[key]['params_version'] = self.dynamics_params_version
+            self.clear_selection('PARAMS_UPDATED')
+            self.new_epoch('PARAMS_UPDATED',audit_fields=dict(params_version=self.dynamics_params_version,
+                previous_params_version=previous_version,parameter_changes=changes,updated_by=source))
         elif path == '/api/config':
             # 配置按版本更新，字段白名单限制能力；更新后需重新切换和归中才能操纵。
             self.operator(source)
@@ -637,7 +708,8 @@ class SimulationService:
                         timing=timing_details(item,age,body['ttl_ms'],'VOICE_DURATION_ELAPSED'))
                 # 映射在识别适配层只应用一次，避免二次映射绕过危险动作确认。
                 template = VOICE_MOTIONS[action]
-                limits = [self.config['max_horizontal_speed_m_s']]*2+[self.config['max_vertical_speed_m_s'],self.config['max_yaw_rate_rad_s']]
+                effective = self.motion_limits()
+                limits = [effective['max_horizontal_speed_m_s']]*2+[effective['max_vertical_speed_m_s'],effective['max_yaw_rate_rad_s']]
                 values = tuple(v/.5*limit for v,limit in zip(template,limits))
             else:
                 if not CAPABILITIES[source]['continuous']:
@@ -649,8 +721,9 @@ class SimulationService:
                     dz = self.config['deadzone']
                     mapped = [0. if abs(v)<=dz else math.copysign((abs(v)-dz)/(1-dz),v)*self.config['sensitivity'] for v in mapped]
                     norm = max(1.,math.hypot(mapped[0],mapped[1]))
-                    values = (mapped[0]/norm*self.config['max_horizontal_speed_m_s'],mapped[1]/norm*self.config['max_horizontal_speed_m_s'],
-                        mapped[2]*self.config['max_vertical_speed_m_s'],mapped[3]*self.config['max_yaw_rate_rad_s'])
+                    effective = self.motion_limits()
+                    values = (mapped[0]/norm*effective['max_horizontal_speed_m_s'],mapped[1]/norm*effective['max_horizontal_speed_m_s'],
+                        mapped[2]*effective['max_vertical_speed_m_s'],mapped[3]*effective['max_yaw_rate_rad_s'])
                 else:
                     values = tuple(number(body.get(k),k) for k in ('vx_m_s','vy_m_s','vz_m_s','yaw_rate_rad_s'))
             for axis,value in zip(('vx','vy','vz','yaw'),values):
@@ -889,6 +962,8 @@ def make_server(service, host, port, allowed_origins=()):
                     if len(parts)==5 and parts[:3]==['','api','commands']:
                         result = service.command_state(parts[3],parts[4],source)
                         return self.reply(200,dict(ok=True,data=result))
+                    if self.path == '/api/params':
+                        return self.reply(200,dict(ok=True,data=dynamics_params.view(service.state())))
                     if self.path != '/api/state':
                         raise APIError(404,'接口不存在','NOT_FOUND')
                     result = service.state()
@@ -927,13 +1002,15 @@ def main():
     parser.add_argument('--wind',type=float,nargs=3,default=[0.,0.,0.])
     parser.add_argument('--compensation',action='store_true')
     parser.add_argument('--config',type=Path,default=Path(__file__).resolve().parent/'control_config.json')
+    parser.add_argument('--params',type=Path,default=Path(__file__).resolve().parent/'dynamics_params.json')
     args = parser.parse_args()
     from simulation_core import SimulationCore
     core = SimulationCore()
     core.set_wind(args.wind)
     core.enable_disturbance_compensation(args.compensation)
     config = json.loads(args.config.read_text(encoding='utf-8')) if args.config.exists() else None
-    service = SimulationService(core,dict(app=args.app_token,ring=args.ring_token,voice=args.voice_token),config,args.config)
+    service = SimulationService(core,dict(app=args.app_token,ring=args.ring_token,voice=args.voice_token),config,args.config,
+        dynamics_params_path=args.params)
     server = make_server(service,args.host,args.port,args.allow_origin)
     service.start()
     print(f'Multi-source simulation API: http://{args.host}:{server.server_port}',flush=True)

@@ -155,7 +155,8 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit, onManageConnectio
             } },
             onStop={ scope.launch { client.stop() } }, onProtect={ scope.launch { client.protect() } },
             onLeft={ left=it; report() }, onRight={ right=it; report() },
-            onLeftTouch={ leftTouch=it }, onRightTouch={ rightTouch=it })
+            onLeftTouch={ leftTouch=it }, onRightTouch={ rightTouch=it },
+            left=left, right=right, leftTouch=leftTouch, rightTouch=rightTouch)
         if (settingsMotion.visible) FlightSettingsPanel(
             selectedTab=settingsTab,onTabChange={ settingsTab=it },hud=hud,onHudChange=vm::setHudPreferences,
             motionProgress=settingsMotion.progress,motionInputBlocked=!settingsMotion.ready,
@@ -203,6 +204,7 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
     onBack: ()->Unit={}, onSettings: ()->Unit={}, onPrimary: ()->Unit={},
     onStop: ()->Unit={}, onProtect: ()->Unit={},
     onLeft: (Offset)->Unit={}, onRight: (Offset)->Unit={}, onLeftTouch: (Boolean)->Unit={}, onRightTouch: (Boolean)->Unit={},
+    left: Offset=Offset.Zero, right: Offset=Offset.Zero, leftTouch: Boolean=false, rightTouch: Boolean=false,
     hud: HudPreferences=HudPreferences(), videoLabel: String?=null,qualityLabel: String?=null,
     fleetMembers: List<UnifiedDeviceState> = emptyList(),selfDeviceId: String?=null,
     memberFresh: (UnifiedDeviceState)->Boolean={false},commandReceipt: String?=null,
@@ -297,9 +299,11 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
                     Modifier.align(if (display.swapInstruments) Alignment.TopStart else Alignment.TopEnd)
                         .offset(x=if (display.swapInstruments) inset else -inset).width(mapWidth).height(instrumentHeight)
                         .alpha(display.mapOpacity),fleetMembers,selfDeviceId,memberFresh)
-                StickPanel("升降 / 转向",inputEnabled,onLeft,onLeftTouch,
+                StickPanel("升降 / 转向",left,leftTouch,StickAxis.YAW,StickAxis.VERTICAL,
+                    inputEnabled,onLeft,onLeftTouch,
                     Modifier.align(Alignment.BottomStart).width(stickWidth).height(stickHeight).alpha(display.joystickOpacity).testTag("left-stick-panel"))
-                StickPanel("前后 / 左右",inputEnabled,onRight,onRightTouch,
+                StickPanel("前后 / 左右",right,rightTouch,StickAxis.LATERAL,StickAxis.FORWARD,
+                    inputEnabled,onRight,onRightTouch,
                     Modifier.align(Alignment.BottomEnd).width(stickWidth).height(stickHeight).alpha(display.joystickOpacity).testTag("right-stick-panel"))
             }
         }
@@ -307,12 +311,20 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
 }
 
 @Composable
-private fun StickPanel(label: String,enabled: Boolean,onValue: (Offset)->Unit,onTouch: (Boolean)->Unit,modifier: Modifier) {
-    // 底部保留握持留白和原有摇杆位置，轴向说明交给无障碍语义。
+private fun StickPanel(
+    label: String, value: Offset, touching: Boolean,
+    xAxis: StickAxis, yAxis: StickAxis,
+    enabled: Boolean,onValue: (Offset)->Unit,onTouch: (Boolean)->Unit,modifier: Modifier
+) {
+    // 底部保留握持留白；读数固定占 24dp，摇杆按方案 A 收到 104dp，读数与圆盘互斥不重叠。
+    // 轴向说明继续留在无障碍语义里，读数只做视觉层，不改 onValue / onTouch 与发送节奏。
     BoxWithConstraints(modifier.padding(bottom=24.dp).semantics { contentDescription=label },
         contentAlignment=Alignment.Center) {
-        val diameter=minOf(128.dp,maxWidth,maxHeight.coerceAtLeast(24.dp))
-        VirtualJoystick(enabled,onValue,onTouch,diameter)
+        val diameter=minOf(104.dp,maxWidth,(maxHeight-24.dp).coerceAtLeast(24.dp))
+        Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+            StickReadout(value.x,value.y,xAxis,yAxis,touching)
+            VirtualJoystick(enabled,onValue,onTouch,diameter)
+        }
     }
 }
 

@@ -48,9 +48,11 @@
 | 摇杆快照组装 | `ui/LandscapeControlScreen.kt:127` | `StickSnapshot(right.x, right.y, left.x, left.y)` |
 | 轴顺序 | `rotorpy/RotorPyClient.kt:86` | `axes() = [ry, -rx, ly, -lx]` |
 | 后端解析 | `backend/app_server.py` | `[vx, vy, vz, yaw]`，故 `yaw = -lx` |
-| UI 死区 | `ui/components/Joystick.kt:35` | `deadZone = 0.08f` |
+| UI 死区 | `ui/RotorPyScreen.kt:68`（`VirtualJoystick`） | `abs(x) < .08f` 归零，即 0.08 |
 | 后端死区 | `backend/control_config.py:8` | `'deadzone': .08` |
 | 停止条件 | `RotorPyClient.onStick` | 两杆全零才走 `/api/stop`；单轴回中只归零该轴 |
+
+**代码落点核定**（2026-11-23 复核）：v0.9.3 可达页面由 `MainActivity.kt:85` 路由表决定，`single` → `RotorPyScreen` → `FlightControlScreen`（`LandscapeControlScreen.kt`）→ `VirtualJoystick`。`ui/ControlScreen.kt` 与 `ui/components/Joystick.kt` 无任何路由引用，是 v0.9.0 遗留死代码，**不是页面**，不得作为实现落点。D2 读数落在 `StickPanel` 与新增 `StickReadout.kt`，`VirtualJoystick` 手势逻辑不改。
 
 读数文案沿用上表语义：左杆横向标“转向”，纵向标“升降”，不使用工程轴名。
 

@@ -4,8 +4,10 @@ import com.vrxfusion.remote.device.CommandRecord
 import com.vrxfusion.remote.device.CommandStatus
 import com.vrxfusion.remote.device.DeviceCommand
 import com.vrxfusion.remote.device.DeviceDescriptor
+import com.vrxfusion.remote.device.DeviceKind
 import com.vrxfusion.remote.device.DeviceState
 import com.vrxfusion.remote.device.LinkState
+import com.vrxfusion.remote.device.RealityType
 import com.vrxfusion.remote.device.Vec3
 import com.vrxfusion.remote.protocol.AckStatus
 import com.vrxfusion.remote.protocol.MsgType
@@ -14,6 +16,7 @@ import com.vrxfusion.remote.protocol.WsMessage
 import com.vrxfusion.remote.protocol.WsTransport
 import com.vrxfusion.remote.sim.VirtualDeviceSimulator
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -72,6 +75,23 @@ abstract class BaseAdapter(final override val descriptor: DeviceDescriptor) : De
     private val seqGen = java.util.concurrent.atomic.AtomicLong(0)
     private fun nextSeq() = seqGen.incrementAndGet()
 
+    /** UI 能力隐藏不是安全边界；所有适配器发送前必须再次拒绝不支持的指令。 */
+    protected fun commandRejection(cmd: DeviceCommand): String? = when {
+        descriptor.reserved -> "预留接口未接入（EXT-004 禁用）"
+        cmd is DeviceCommand.SimManage && descriptor.reality != RealityType.VIRTUAL ->
+            "仿真管理仅虚拟设备可用（EXT-004）"
+        cmd.requires !in descriptor.capabilities -> "设备不支持${cmd.requires.label}"
+        descriptor.kind == DeviceKind.DRONE && cmd is DeviceCommand.Gait -> "无人机不支持机器狗姿态"
+        descriptor.kind == DeviceKind.QUADRUPED && cmd is DeviceCommand.Takeoff -> "机器狗不支持起飞"
+        descriptor.kind == DeviceKind.QUADRUPED && cmd is DeviceCommand.Land -> "机器狗不支持降落"
+        descriptor.kind == DeviceKind.QUADRUPED && cmd is DeviceCommand.Hover -> "机器狗不支持悬停"
+        descriptor.kind == DeviceKind.QUADRUPED && cmd is DeviceCommand.ReturnHome -> "机器狗不支持无人机返航"
+        else -> null
+    }
+
+    protected fun rejectIfUnsupported(cmd: DeviceCommand): CommandRecord? =
+        commandRejection(cmd)?.let { makeRecord(cmd, CommandStatus.FAILED, it) }
+
     companion object {
         fun DeviceCommand.displayName(): String = when (this) {
             is DeviceCommand.Motion -> "运动指令"
@@ -88,6 +108,51 @@ abstract class BaseAdapter(final override val descriptor: DeviceDescriptor) : De
     }
 }
 
+/** 内置装配类型；第三方扩展可直接实现 DeviceAdapter 并调用 registry.register(adapter)。 */
+enum class AdapterKind { LOCAL_SIM, SERVICE, RESERVED }
+
+/** 统一注册入口：身份唯一、描述合法、虚实边界明确，避免各页面自行 new 适配器。 */
+class DeviceAdapterRegistry(
+    private val scope: CoroutineScope,
+    private val transport: WsTransport
+) {
+    private val adapters = linkedMapOf<String, DeviceAdapter>()
+
+    val values: List<DeviceAdapter> get() = adapters.values.toList()
+    operator fun get(deviceId: String): DeviceAdapter? = adapters[deviceId]
+
+    fun create(descriptor: DeviceDescriptor, kind: AdapterKind): DeviceAdapter = register(
+        when (kind) {
+            AdapterKind.LOCAL_SIM -> LocalSimAdapter(scope, descriptor)
+            AdapterKind.SERVICE -> ServiceAdapter(scope, descriptor, transport)
+            AdapterKind.RESERVED -> ReservedAdapter(descriptor)
+        }
+    )
+
+    fun register(adapter: DeviceAdapter): DeviceAdapter {
+        val descriptor = adapter.descriptor
+        require(descriptor.id.matches(Regex("[A-Za-z0-9_-]{1,64}"))) { "设备ID格式无效" }
+        require(descriptor.id !in adapters) { "设备ID重复: ${descriptor.id}" }
+        require(com.vrxfusion.remote.device.Capability.TELEMETRY in descriptor.capabilities) {
+            "适配器必须声明状态遥测能力"
+        }
+        require(com.vrxfusion.remote.device.Capability.SIM_MANAGE !in descriptor.capabilities ||
+            descriptor.reality == RealityType.VIRTUAL) { "实机不得声明仿真管理能力" }
+        require(!descriptor.reserved || kindOf(adapter) == AdapterKind.RESERVED) {
+            "预留设备必须使用 ReservedAdapter"
+        }
+        adapters[descriptor.id] = adapter
+        return adapter
+    }
+
+    private fun kindOf(adapter: DeviceAdapter): AdapterKind = when (adapter) {
+        is LocalSimAdapter -> AdapterKind.LOCAL_SIM
+        is ServiceAdapter -> AdapterKind.SERVICE
+        is ReservedAdapter -> AdapterKind.RESERVED
+        else -> AdapterKind.SERVICE
+    }
+}
+
 /**
  * 本地演示适配器：直连内置仿真器。
  * 仅用于无服务端时的离线开发调试，状态标记 iface_test（APP-004 明确标记）。
@@ -97,23 +162,50 @@ class LocalSimAdapter(
     descriptor: DeviceDescriptor
 ) : BaseAdapter(descriptor) {
     private val sim = VirtualDeviceSimulator(scope, descriptor)
+    private var collectJob: Job? = null
+    @Volatile private var running = false
+
+    init {
+        require(descriptor.reality == RealityType.VIRTUAL && !descriptor.reserved) {
+            "LocalSimAdapter 仅允许非预留虚拟设备"
+        }
+    }
 
     override fun start() {
-        scope.launch {
-            sim.state.collect { s -> _state.value = s.copy(quality = "iface_test") }
+        if (running) return
+        running = true
+        collectJob = scope.launch {
+            sim.state.collect { s ->
+                _state.value = if (running) s.copy(quality = "iface_test") else s.copy(
+                    online = false, linkState = LinkState.OFFLINE, quality = "iface_test"
+                )
+            }
         }
         sim.start()
     }
 
-    override fun stop() = sim.stop()
-
-    override fun send(cmd: DeviceCommand): CommandRecord {
-        val rec = makeRecord(cmd, CommandStatus.SUCCESS)
-        sim.onCommand(cmd)
-        return rec
+    override fun stop() {
+        running = false
+        sim.stop()
+        collectJob?.cancel()
+        collectJob = null
+        _state.value = _state.value.copy(online = false, linkState = LinkState.OFFLINE, quality = "iface_test")
     }
 
-    override fun setController(name: String?) = sim.setController(name)
+    override fun send(cmd: DeviceCommand): CommandRecord {
+        rejectIfUnsupported(cmd)?.let { return it }
+        if (!running) return makeRecord(cmd, CommandStatus.FAILED, "本地仿真未启动")
+        return try {
+            sim.onCommand(cmd)
+            makeRecord(cmd, CommandStatus.SUCCESS)
+        } catch (error: RuntimeException) {
+            makeRecord(cmd, CommandStatus.FAILED, "仿真执行异常: ${error.message ?: error.javaClass.simpleName}")
+        }
+    }
+
+    override fun setController(name: String?) {
+        if (running) sim.setController(name)
+    }
 }
 
 /**
@@ -129,9 +221,14 @@ open class ServiceAdapter(
 
     /** cmd_id -> 本地记录 seq，用于 ack 回填 */
     private val cmdSeqMap = ConcurrentHashMap<String, Long>()
+    private var collectJob: Job? = null
+    @Volatile private var running = false
 
+    @Synchronized
     override fun start() {
-        scope.launch {
+        if (collectJob?.isActive == true) return
+        running = true
+        collectJob = scope.launch {
             transport.incoming.collect { m -> handle(m) }
         }
     }
@@ -206,9 +303,19 @@ open class ServiceAdapter(
         )
     }
 
-    override fun stop() {}
+    @Synchronized
+    override fun stop() {
+        running = false
+        collectJob?.cancel()
+        collectJob = null
+        _state.value = _state.value.copy(
+            online = false, controller = null, linkState = LinkState.OFFLINE
+        )
+    }
 
     override fun send(cmd: DeviceCommand): CommandRecord {
+        rejectIfUnsupported(cmd)?.let { return it }
+        if (!running) return makeRecord(cmd, CommandStatus.FAILED, "服务适配器已停止")
         if (transport.state.value != WsTransport.ConnState.CONNECTED) {
             return makeRecord(cmd, CommandStatus.FAILED, "服务未连接")
         }
@@ -248,7 +355,7 @@ open class ServiceAdapter(
 
     /** 控制权申请/释放 → 服务端租约（SAFE-001 / CTL-002） */
     override fun setController(name: String?) {
-        if (transport.state.value != WsTransport.ConnState.CONNECTED) return
+        if (!running || transport.state.value != WsTransport.ConnState.CONNECTED) return
         transport.send(
             if (name != null) MsgType.LEASE_REQ else MsgType.LEASE_REL,
             buildJsonObject { put("device", descriptor.id) },
@@ -279,7 +386,7 @@ class ReservedAdapter(
     override fun stop() {}
 
     override fun send(cmd: DeviceCommand): CommandRecord =
-        makeRecord(cmd, CommandStatus.FAILED, "预留接口未接入（EXT-004 禁用）")
+        rejectIfUnsupported(cmd) ?: makeRecord(cmd, CommandStatus.FAILED, "预留接口不可用")
 
     override fun setController(name: String?) {}
 }

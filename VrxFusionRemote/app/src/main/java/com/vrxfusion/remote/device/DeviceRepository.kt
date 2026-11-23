@@ -1,11 +1,11 @@
 package com.vrxfusion.remote.device
 
+import com.vrxfusion.remote.adapters.AdapterKind
 import com.vrxfusion.remote.adapters.DeviceAdapter
-import com.vrxfusion.remote.adapters.LocalSimAdapter
-import com.vrxfusion.remote.adapters.ReservedAdapter
-import com.vrxfusion.remote.adapters.ServiceAdapter
+import com.vrxfusion.remote.adapters.DeviceAdapterRegistry
 import com.vrxfusion.remote.protocol.WsTransport
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -22,15 +22,17 @@ import kotlinx.coroutines.launch
  */
 class DeviceRepository(
     private val scope: CoroutineScope,
-    private val transport: WsTransport
+    private val transport: WsTransport,
+    private val registry: DeviceAdapterRegistry = DeviceAdapterRegistry(scope, transport)
 ) {
-    private val adapters = linkedMapOf<String, DeviceAdapter>()
 
     private val _descriptors = MutableStateFlow<List<DeviceDescriptor>>(emptyList())
     val descriptors: StateFlow<List<DeviceDescriptor>> = _descriptors
 
     private val _states = MutableStateFlow<Map<String, DeviceState>>(emptyMap())
     val states: StateFlow<Map<String, DeviceState>> = _states
+    private val stateJobs = mutableMapOf<String, Job>()
+    private var started = false
 
     /** 运行模式 —— ARC-005（本期：独立仿真；回放模式后续接入） */
     enum class RunMode(val label: String) {
@@ -42,16 +44,19 @@ class DeviceRepository(
 
     fun switchRunMode(mode: RunMode) { _runMode.value = mode }
 
-    fun adapterOf(deviceId: String): DeviceAdapter? = adapters[deviceId]
+    fun adapterOf(deviceId: String): DeviceAdapter? = registry[deviceId]
 
     fun stateOf(deviceId: String): DeviceState =
         _states.value[deviceId] ?: DeviceState(online = false)
 
+    @Synchronized
     fun start() {
-        seedDevices()
-        adapters.values.forEach { adapter ->
+        if (started) return
+        if (registry.values.isEmpty()) seedDevices()
+        started = true
+        registry.values.forEach { adapter ->
             adapter.start()
-            scope.launch {
+            stateJobs[adapter.descriptor.id] = scope.launch {
                 adapter.state.collect { s ->
                     _states.value = _states.value + (adapter.descriptor.id to s)
                 }
@@ -59,8 +64,18 @@ class DeviceRepository(
         }
     }
 
+    @Synchronized
     fun stop() {
-        adapters.values.forEach { it.stop() }
+        if (started) {
+            started = false
+            stateJobs.values.forEach { it.cancel() }
+            stateJobs.clear()
+            registry.values.forEach { it.stop() }
+            _states.value = _states.value.mapValues { (_, state) ->
+                state.copy(online = false, controller = null, linkState = LinkState.OFFLINE)
+            }
+        }
+        // 传输可能由 ViewModel 独立连接；即使适配器未启动也必须清理。
         transport.disconnect()
     }
 
@@ -113,16 +128,9 @@ class DeviceRepository(
         )
     }
 
-    private enum class AdapterKind { LOCAL_SIM, SERVICE, RESERVED }
-
     private fun register(d: DeviceDescriptor, kind: AdapterKind) {
-        val adapter: DeviceAdapter = when (kind) {
-            AdapterKind.LOCAL_SIM -> LocalSimAdapter(scope, d)
-            AdapterKind.SERVICE -> ServiceAdapter(scope, d, transport)
-            AdapterKind.RESERVED -> ReservedAdapter(d)
-        }
-        adapters[d.id] = adapter
-        _descriptors.value = adapters.values.map { it.descriptor }
+        registry.create(d, kind)
+        _descriptors.value = registry.values.map { it.descriptor }
         _states.value = _states.value + (d.id to DeviceState(online = false))
     }
 }

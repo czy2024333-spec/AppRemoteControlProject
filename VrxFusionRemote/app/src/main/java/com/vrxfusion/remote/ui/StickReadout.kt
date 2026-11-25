@@ -24,7 +24,16 @@ import com.vrxfusion.remote.ui.theme.TextSecondary
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** 与后端 control_config.py 的 deadzone .08、Joystick.kt 的 deadZone = 0.08f 保持同一口径。 */
+/**
+ * 死区阈值与 backend/control_config.py 的 `deadzone .08` 对齐。
+ *
+ * 边界包含规则以「后端是否会产生运动」为准：backend/app_server.py 的 `/api/input`
+ * 映射用 `abs(v) <= dz` 归零，因此恰好 0.08 也视为中位（见 StickAxis.text）。
+ * UI 发射侧 `ui/RotorPyScreen.kt` 的 VirtualJoystick 用 `abs(v) < .08f`，
+ * 在恰好 0.08 会发出一个被后端归零的无效量，属基线既有差异，本期不改发射侧；
+ * 读数不显示该无效量，避免出现「读数有量、后端归零」。
+ * `ui/components/Joystick.kt` 是不可达旧页的遗留摇杆，不作为任何口径依据。
+ */
 const val DEFAULT_DEAD_ZONE = 0.08f
 
 /**
@@ -33,6 +42,8 @@ const val DEFAULT_DEAD_ZONE = 0.08f
  * 方向词与 StickSnapshot.axes() 的符号严格对齐：
  *   yaw = -lx，vz = ly，vx = ry，vy = -rx（后端坐标系 Y 向左为正）。
  * 读数只表示本地杆量，不代表指令已被后端确认；真实回执仍以 FMA 与命令回执为准。
+ * 百分比是归一化原始杆量，不含后端死区外重新缩放 `(abs(v)-dz)/(1-dz)`，
+ * 也不代表实际速度/角速度。
  */
 enum class StickAxis(val label: String, val negative: String, val positive: String) {
     /** 左杆横向：左推 lx<0 → yaw>0 左转；右推 lx>0 → yaw<0 右转 */
@@ -45,14 +56,18 @@ enum class StickAxis(val label: String, val negative: String, val positive: Stri
     FORWARD("前后", "后", "前");
 
     fun text(value: Float, deadZone: Float = DEFAULT_DEAD_ZONE): String {
-        if (!value.isFinite() || abs(value) < deadZone) return "$label 中位"
+        // 与后端 /api/input 的 `abs(v) <= dz` 归零规则一致：恰好等于死区也不产生运动。
+        if (!value.isFinite() || abs(value) <= deadZone) return "$label 中位"
         val direction = if (value < 0f) negative else positive
         val percent = (abs(value) * 100f).roundToInt().coerceIn(1, 100)
         return "$label $direction $percent%"
     }
 }
 
-/** x/y 为摇杆已应用死区后的归一化输出，与传给 onValue/onInput 的值是同一口径。 */
+/**
+ * x/y 为 VirtualJoystick `emit` 的归一化杆量（与 onValue 同一口径）。
+ * 死区判定比发射侧多包含恰好等于 0.08 的单点，见 DEFAULT_DEAD_ZONE。
+ */
 fun stickReadoutLines(
     x: Float, y: Float,
     xAxis: StickAxis, yAxis: StickAxis,

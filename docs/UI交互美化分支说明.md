@@ -48,11 +48,14 @@
 | 摇杆快照组装 | `ui/LandscapeControlScreen.kt:127` | `StickSnapshot(right.x, right.y, left.x, left.y)` |
 | 轴顺序 | `rotorpy/RotorPyClient.kt:86` | `axes() = [ry, -rx, ly, -lx]` |
 | 后端解析 | `backend/app_server.py` | `[vx, vy, vz, yaw]`，故 `yaw = -lx` |
-| UI 死区 | `ui/RotorPyScreen.kt:68`（`VirtualJoystick`） | `abs(x) < .08f` 归零，即 0.08 |
-| 后端死区 | `backend/control_config.py:8` | `'deadzone': .08` |
+| UI 死区（发射侧） | `ui/RotorPyScreen.kt:68`（`VirtualJoystick`） | `abs(x) < .08f` 归零，恰好 0.08 仍会发出 |
+| 后端死区（生效侧） | `backend/control_config.py:8`、`backend/app_server.py:559` | `deadzone .08`，`abs(v) <= dz` 归零 |
+| 读数边界 | `ui/StickReadout.kt` | `abs(v) <= 0.08` 显示中位，以「后端是否产生运动」为准 |
 | 停止条件 | `RotorPyClient.onStick` | 两杆全零才走 `/api/stop`；单轴回中只归零该轴 |
 
-**代码落点核定**（2026-11-23 复核）：v0.9.3 可达页面由 `MainActivity.kt:85` 路由表决定，`single` → `RotorPyScreen` → `FlightControlScreen`（`LandscapeControlScreen.kt`）→ `VirtualJoystick`。`ui/ControlScreen.kt` 与 `ui/components/Joystick.kt` 无任何路由引用，是 v0.9.0 遗留死代码，**不是页面**，不得作为实现落点。D2 读数落在 `StickPanel` 与新增 `StickReadout.kt`，`VirtualJoystick` 手势逻辑不改。
+**死区边界差异（2026-11-25 验证报告整改）**：三处阈值同为 0.08，但边界包含规则不同——UI 发射侧 `<`、后端生效侧 `<=`。读数按后端生效口径取 `<=`，避免出现「读数有量、后端归零」；`VirtualJoystick` 发射侧与后端不改动，单点 0.08 的发射/生效差异为基线既有行为，已记录为后续项。
+
+**代码落点核定**（2026-11-23 复核，2026-11-25 更正表述）：v0.9.3 可达页面由 `MainActivity.kt:85` 路由表决定，`single` → `RotorPyScreen` → `FlightControlScreen`（`LandscapeControlScreen.kt`）→ `VirtualJoystick`。`ui/ControlScreen.kt` 与 `ui/components/Joystick.kt` **无可达路由引用**（并非「无任何调用点」）：`ControlScreen.kt:184` 仍调用 `Joystick(...)`，但该页面本身不可达，二者属 v0.9.0 遗留死代码，**不是页面**，不得作为实现落点或事实依据。D2 读数落在 `StickPanel` 与新增 `StickReadout.kt`，`VirtualJoystick` 手势逻辑不改。
 
 读数文案沿用上表语义：左杆横向标“转向”，纵向标“升降”，不使用工程轴名。
 
@@ -65,9 +68,9 @@
 
 ## 五、验收
 
-1. 摇杆 5% 显示“中位”，10% 显示方向与百分比，方向与 `yaw = -lx` 一致；
+1. 摇杆 5% 与 ±8%（恰好 0.08）显示“中位”，10% 显示方向与百分比，方向与 `yaw = -lx` 一致；
 2. 停止键下沉回弹，长按不重复触发；
 3. FMA 变化后 1.2s 描边淡出；
 4. 开启“减弱动态效果”后无呼吸与位移，功能正常；
 5. 连续操纵 10 分钟帧率不低于基线；
-6. Android 单测不低于 175 项基线。
+6. Android 单测不低于 **150 项基线**（`ui-interaction-polish` @ `d7c624a` 实测 25 suites / 150 tests / 8 skipped）；全量回归存在 1 项基线遗留失败，按「已知失败清单」口径记录，不宣称全绿。

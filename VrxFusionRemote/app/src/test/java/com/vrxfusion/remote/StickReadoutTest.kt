@@ -7,19 +7,40 @@ import com.vrxfusion.remote.ui.stickReadoutLines
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** D2 验收：死区、方向词、百分比，以及方向词与实际发送轴符号的一致性。 */
+/**
+ * D2 验收：死区边界、方向词、百分比，以及方向词与实际发送轴符号的一致性。
+ * 边界规则静态对齐 backend/app_server.py 的 `abs(v) <= dz`；本类不发起 HTTP，
+ * 未验证真实请求链路在边界上的注入行为，也不代表后端缩放后的速度值。
+ */
 class StickReadoutTest {
 
     private fun lines(x: Float, y: Float, xAxis: StickAxis, yAxis: StickAxis) =
         stickReadoutLines(x, y, xAxis, yAxis)
 
     @Test
-    fun deadZoneShowsNeutralAndBoundaryIsActive() {
+    fun deadZoneShowsNeutralAndBoundaryIsInclusive() {
         assertEquals("转向 中位" to "升降 中位", lines(0f, 0f, StickAxis.YAW, StickAxis.VERTICAL))
         // 5% 处在死区内，两行都显示中位
         assertEquals("转向 中位" to "升降 中位", lines(.05f, -.05f, StickAxis.YAW, StickAxis.VERTICAL))
-        // 恰好 0.08 不算中位，与 Joystick.emit()/VirtualJoystick 的 abs(v) < deadZone 一致
-        assertEquals("转向 右 8%" to "升降 中位", lines(DEFAULT_DEAD_ZONE, 0f, StickAxis.YAW, StickAxis.VERTICAL))
+        // ±0.08 都是中位：与后端 app_server.py 的 `abs(v) <= dz` 归零规则一致，
+        // 不显示「后端不会执行的量」。VirtualJoystick 的发射侧仍为 `< .08f`，
+        // 该单点的发射/生效差异属基线既有行为，本期不改发射侧。
+        assertEquals("转向 中位" to "升降 中位", lines(DEFAULT_DEAD_ZONE, 0f, StickAxis.YAW, StickAxis.VERTICAL))
+        assertEquals("转向 中位" to "升降 中位", lines(-DEFAULT_DEAD_ZONE, 0f, StickAxis.YAW, StickAxis.VERTICAL))
+        // 略超死区才显示方向与百分比
+        assertEquals("转向 右 8%" to "升降 中位", lines(.0801f, 0f, StickAxis.YAW, StickAxis.VERTICAL))
+        assertEquals("转向 左 8%" to "升降 中位", lines(-.0801f, 0f, StickAxis.YAW, StickAxis.VERTICAL))
+    }
+
+    @Test
+    fun deadZoneBoundaryAppliesToAllFourAxes() {
+        // 后端对 [vx,vy,vz,yaw] 四轴统一 `abs(v) <= dz` 归零，读数四轴必须同口径
+        listOf(StickAxis.YAW, StickAxis.VERTICAL, StickAxis.LATERAL, StickAxis.FORWARD).forEach { axis ->
+            assertEquals("${axis.label} 中位", axis.text(DEFAULT_DEAD_ZONE))
+            assertEquals("${axis.label} 中位", axis.text(-DEFAULT_DEAD_ZONE))
+        }
+        // 斜推时两行独立判定：一轴正好在死区、另一轴有效
+        assertEquals("转向 中位" to "升降 升 50%", lines(DEFAULT_DEAD_ZONE, .5f, StickAxis.YAW, StickAxis.VERTICAL))
     }
 
     @Test

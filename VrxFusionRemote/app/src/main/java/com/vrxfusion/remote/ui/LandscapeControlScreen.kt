@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -183,10 +184,14 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit, onManageConnectio
 /** 设置遮住操控页时，安全操作依然固定可达；忙碌不会禁用它们。 */
 @Composable
 fun FlightSafetyButtons(enabled: Boolean,onStop: ()->Unit,onProtect: ()->Unit) {
+    val stopInteraction=remember { MutableInteractionSource() }
+    val protectInteraction=remember { MutableInteractionSource() }
     Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=2.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        Button(onClick=onStop,enabled=enabled,modifier=Modifier.weight(1f),
+        Button(onClick=onStop,enabled=enabled,interactionSource=stopInteraction,
+            modifier=Modifier.weight(1f).pressScale(stopInteraction,StopPressScale),
             colors=ButtonDefaults.buttonColors(containerColor=SurfaceCard,contentColor=TextPrimary)) { Text("停止") }
-        Button(onClick=onProtect,enabled=enabled,modifier=Modifier.weight(1f),
+        Button(onClick=onProtect,enabled=enabled,interactionSource=protectInteraction,
+            modifier=Modifier.weight(1f).pressScale(protectInteraction),
             colors=ButtonDefaults.buttonColors(containerColor=ProtectionFill,contentColor=ProtectionText)) { Text("保护") }
     }
 }
@@ -216,28 +221,37 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
         Column(Modifier.fillMaxSize().windowInsetsPadding(flightSafeInsets()).padding(8.dp),
             verticalArrangement=Arrangement.spacedBy(6.dp)) {
             @Composable fun buttons(modifier: Modifier=Modifier) {
+                val primaryInteraction=remember { MutableInteractionSource() }
+                val stopInteraction=remember { MutableInteractionSource() }
+                val protectInteraction=remember { MutableInteractionSource() }
                 Row(modifier.testTag("critical-actions"),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    Button(onClick=onPrimary,enabled=notice.actionEnabled,modifier=Modifier.weight(1f).height(48.dp),
+                    Button(onClick=onPrimary,enabled=notice.actionEnabled,interactionSource=primaryInteraction,
+                        modifier=Modifier.weight(1f).height(48.dp).pressScale(primaryInteraction),
                         shape=RoundedCornerShape(14.dp),
                         colors=ButtonDefaults.buttonColors(containerColor=ControlFill,contentColor=ControlText,
                             disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary),
                         contentPadding=PaddingValues(horizontal=8.dp)) { Text(notice.actionLabel,maxLines=1,fontSize=12.sp) }
-                    Button(onClick=onStop,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
+                    Button(onClick=onStop,enabled=safetyEnabled,interactionSource=stopInteraction,
+                        modifier=Modifier.width(72.dp).height(48.dp).pressScale(stopInteraction,StopPressScale),
                         shape=RoundedCornerShape(14.dp),
                         colors=ButtonDefaults.buttonColors(containerColor=SurfaceCard,contentColor=TextPrimary,
                             disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary),
                         contentPadding=PaddingValues(4.dp)) { Text("停止",fontSize=12.sp) }
-                    Button(onClick=onProtect,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
+                    Button(onClick=onProtect,enabled=safetyEnabled,interactionSource=protectInteraction,
+                        modifier=Modifier.width(72.dp).height(48.dp).pressScale(protectInteraction),
                         shape=RoundedCornerShape(14.dp),
                         contentPadding=PaddingValues(4.dp),
                         colors=ButtonDefaults.buttonColors(containerColor=ProtectionFill,contentColor=ProtectionText,
                             disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary)) { Text("保护",fontSize=12.sp) }
                 }
             }
+            val backInteraction=remember { MutableInteractionSource() }
+            val settingsInteraction=remember { MutableInteractionSource() }
             Row(Modifier.fillMaxWidth().height(48.dp).background(
                 Brush.horizontalGradient(listOf(HudSurface,HudSurface.copy(alpha=.72f))),RoundedCornerShape(14.dp)),
                 verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                IconButton(onClick=onBack) {
+                IconButton(onClick=onBack,interactionSource=backInteraction,
+                    modifier=Modifier.pressScale(backInteraction)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack,contentDescription="返回首页",tint=TextPrimary)
                 }
                 Column(Modifier.weight(1f)) {
@@ -248,7 +262,8 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
                         color=TextSecondary,fontSize=11.sp,lineHeight=15.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                 }
                 if (wide) buttons(Modifier.width(274.dp))
-                IconButton(onClick=onSettings) {
+                IconButton(onClick=onSettings,interactionSource=settingsInteraction,
+                    modifier=Modifier.pressScale(settingsInteraction)) {
                     Icon(Icons.Default.Settings,contentDescription="飞行设置",tint=TextPrimary)
                 }
             }

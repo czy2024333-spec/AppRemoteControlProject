@@ -9,7 +9,6 @@ import android.os.Looper
 import android.provider.Settings
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -160,12 +159,16 @@ fun rememberMotionSheet(open: Boolean): MotionSheetState {
     return MotionSheetState(open || retained,progress.value.coerceIn(0f,1f),open && !settling && progress.value>=.999f)
 }
 
-/** 按下即缩放，回调仍由原clickable即时执行；不延迟、排队或重复发送指令。 */
+/**
+ * 按下即缩放，回调仍由原clickable即时执行；不延迟、排队或重复发送指令。
+ *
+ * D3 起收敛到统一的 [pressScale]：保留原有 0.975 缩放与 spring 手感、下沉为 0，
+ * 因此首页条目 / 设置分类的观感与 v0.9.3 基线一致，只是全仓不再有两套按压实现。
+ */
 @Composable
-fun Modifier.motionPress(source: MutableInteractionSource): Modifier {
-    val pressed by source.collectIsPressedAsState()
-    val enabled=LocalAppMotionEnabled.current
-    val scale by animateFloatAsState(if (pressed && enabled) .975f else 1f,
-        animationSpec=if (enabled) spring(dampingRatio=.85f,stiffness=650f) else snap(),label="press-scale")
-    return graphicsLayer {scaleX=scale;scaleY=scale}
-}
+fun Modifier.motionPress(source: MutableInteractionSource): Modifier =
+    pressScale(
+        source = source,
+        spec = PressScaleSpec(scale = .975f, sinkDp = 0f),
+        animationSpec = spring(dampingRatio = .85f, stiffness = 650f),
+    )

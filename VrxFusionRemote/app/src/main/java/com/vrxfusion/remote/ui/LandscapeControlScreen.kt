@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -155,7 +156,8 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit, onManageConnectio
             } },
             onStop={ scope.launch { client.stop() } }, onProtect={ scope.launch { client.protect() } },
             onLeft={ left=it; report() }, onRight={ right=it; report() },
-            onLeftTouch={ leftTouch=it }, onRightTouch={ rightTouch=it })
+            onLeftTouch={ leftTouch=it }, onRightTouch={ rightTouch=it },
+            left=left, right=right, leftTouch=leftTouch, rightTouch=rightTouch)
         if (settingsMotion.visible) FlightSettingsPanel(
             selectedTab=settingsTab,onTabChange={ settingsTab=it },hud=hud,onHudChange=vm::setHudPreferences,
             motionProgress=settingsMotion.progress,motionInputBlocked=!settingsMotion.ready,
@@ -182,10 +184,14 @@ fun FlightControlScreen(vm: MainViewModel, onBack: () -> Unit, onManageConnectio
 /** 设置遮住操控页时，安全操作依然固定可达；忙碌不会禁用它们。 */
 @Composable
 fun FlightSafetyButtons(enabled: Boolean,onStop: ()->Unit,onProtect: ()->Unit) {
+    val stopInteraction=remember { MutableInteractionSource() }
+    val protectInteraction=remember { MutableInteractionSource() }
     Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=2.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        Button(onClick=onStop,enabled=enabled,modifier=Modifier.weight(1f),
+        Button(onClick=onStop,enabled=enabled,interactionSource=stopInteraction,
+            modifier=Modifier.weight(1f).pressScale(stopInteraction,StopPressScale),
             colors=ButtonDefaults.buttonColors(containerColor=SurfaceCard,contentColor=TextPrimary)) { Text("停止") }
-        Button(onClick=onProtect,enabled=enabled,modifier=Modifier.weight(1f),
+        Button(onClick=onProtect,enabled=enabled,interactionSource=protectInteraction,
+            modifier=Modifier.weight(1f).pressScale(protectInteraction),
             colors=ButtonDefaults.buttonColors(containerColor=ProtectionFill,contentColor=ProtectionText)) { Text("保护") }
     }
 }
@@ -203,6 +209,7 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
     onBack: ()->Unit={}, onSettings: ()->Unit={}, onPrimary: ()->Unit={},
     onStop: ()->Unit={}, onProtect: ()->Unit={},
     onLeft: (Offset)->Unit={}, onRight: (Offset)->Unit={}, onLeftTouch: (Boolean)->Unit={}, onRightTouch: (Boolean)->Unit={},
+    left: Offset=Offset.Zero, right: Offset=Offset.Zero, leftTouch: Boolean=false, rightTouch: Boolean=false,
     hud: HudPreferences=HudPreferences(), videoLabel: String?=null,qualityLabel: String?=null,
     fleetMembers: List<UnifiedDeviceState> = emptyList(),selfDeviceId: String?=null,
     memberFresh: (UnifiedDeviceState)->Boolean={false},commandReceipt: String?=null,
@@ -214,28 +221,37 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
         Column(Modifier.fillMaxSize().windowInsetsPadding(flightSafeInsets()).padding(8.dp),
             verticalArrangement=Arrangement.spacedBy(6.dp)) {
             @Composable fun buttons(modifier: Modifier=Modifier) {
+                val primaryInteraction=remember { MutableInteractionSource() }
+                val stopInteraction=remember { MutableInteractionSource() }
+                val protectInteraction=remember { MutableInteractionSource() }
                 Row(modifier.testTag("critical-actions"),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    Button(onClick=onPrimary,enabled=notice.actionEnabled,modifier=Modifier.weight(1f).height(48.dp),
+                    Button(onClick=onPrimary,enabled=notice.actionEnabled,interactionSource=primaryInteraction,
+                        modifier=Modifier.weight(1f).height(48.dp).pressScale(primaryInteraction),
                         shape=RoundedCornerShape(14.dp),
                         colors=ButtonDefaults.buttonColors(containerColor=ControlFill,contentColor=ControlText,
                             disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary),
                         contentPadding=PaddingValues(horizontal=8.dp)) { Text(notice.actionLabel,maxLines=1,fontSize=12.sp) }
-                    Button(onClick=onStop,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
+                    Button(onClick=onStop,enabled=safetyEnabled,interactionSource=stopInteraction,
+                        modifier=Modifier.width(72.dp).height(48.dp).pressScale(stopInteraction,StopPressScale),
                         shape=RoundedCornerShape(14.dp),
                         colors=ButtonDefaults.buttonColors(containerColor=SurfaceCard,contentColor=TextPrimary,
                             disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary),
                         contentPadding=PaddingValues(4.dp)) { Text("停止",fontSize=12.sp) }
-                    Button(onClick=onProtect,enabled=safetyEnabled,modifier=Modifier.width(72.dp).height(48.dp),
+                    Button(onClick=onProtect,enabled=safetyEnabled,interactionSource=protectInteraction,
+                        modifier=Modifier.width(72.dp).height(48.dp).pressScale(protectInteraction),
                         shape=RoundedCornerShape(14.dp),
                         contentPadding=PaddingValues(4.dp),
                         colors=ButtonDefaults.buttonColors(containerColor=ProtectionFill,contentColor=ProtectionText,
                             disabledContainerColor=Color.Transparent,disabledContentColor=TextSecondary)) { Text("保护",fontSize=12.sp) }
                 }
             }
+            val backInteraction=remember { MutableInteractionSource() }
+            val settingsInteraction=remember { MutableInteractionSource() }
             Row(Modifier.fillMaxWidth().height(48.dp).background(
                 Brush.horizontalGradient(listOf(HudSurface,HudSurface.copy(alpha=.72f))),RoundedCornerShape(14.dp)),
                 verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                IconButton(onClick=onBack) {
+                IconButton(onClick=onBack,interactionSource=backInteraction,
+                    modifier=Modifier.pressScale(backInteraction)) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack,contentDescription="返回首页",tint=TextPrimary)
                 }
                 Column(Modifier.weight(1f)) {
@@ -246,7 +262,8 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
                         color=TextSecondary,fontSize=11.sp,lineHeight=15.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                 }
                 if (wide) buttons(Modifier.width(274.dp))
-                IconButton(onClick=onSettings) {
+                IconButton(onClick=onSettings,interactionSource=settingsInteraction,
+                    modifier=Modifier.pressScale(settingsInteraction)) {
                     Icon(Icons.Default.Settings,contentDescription="飞行设置",tint=TextPrimary)
                 }
             }
@@ -297,9 +314,11 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
                     Modifier.align(if (display.swapInstruments) Alignment.TopStart else Alignment.TopEnd)
                         .offset(x=if (display.swapInstruments) inset else -inset).width(mapWidth).height(instrumentHeight)
                         .alpha(display.mapOpacity),fleetMembers,selfDeviceId,memberFresh)
-                StickPanel("升降 / 转向",inputEnabled,onLeft,onLeftTouch,
+                StickPanel("升降 / 转向",left,leftTouch,StickAxis.YAW,StickAxis.VERTICAL,
+                    inputEnabled,onLeft,onLeftTouch,
                     Modifier.align(Alignment.BottomStart).width(stickWidth).height(stickHeight).alpha(display.joystickOpacity).testTag("left-stick-panel"))
-                StickPanel("前后 / 左右",inputEnabled,onRight,onRightTouch,
+                StickPanel("前后 / 左右",right,rightTouch,StickAxis.LATERAL,StickAxis.FORWARD,
+                    inputEnabled,onRight,onRightTouch,
                     Modifier.align(Alignment.BottomEnd).width(stickWidth).height(stickHeight).alpha(display.joystickOpacity).testTag("right-stick-panel"))
             }
         }
@@ -307,12 +326,20 @@ fun FlightCockpit(state: RotorState?, trail: List<Pair<Double,Double>>, notice: 
 }
 
 @Composable
-private fun StickPanel(label: String,enabled: Boolean,onValue: (Offset)->Unit,onTouch: (Boolean)->Unit,modifier: Modifier) {
-    // 底部保留握持留白和原有摇杆位置，轴向说明交给无障碍语义。
+private fun StickPanel(
+    label: String, value: Offset, touching: Boolean,
+    xAxis: StickAxis, yAxis: StickAxis,
+    enabled: Boolean,onValue: (Offset)->Unit,onTouch: (Boolean)->Unit,modifier: Modifier
+) {
+    // 底部保留握持留白；读数固定占 24dp，摇杆按方案 A 收到 104dp，读数与圆盘互斥不重叠。
+    // 轴向说明继续留在无障碍语义里，读数只做视觉层，不改 onValue / onTouch 与发送节奏。
     BoxWithConstraints(modifier.padding(bottom=24.dp).semantics { contentDescription=label },
         contentAlignment=Alignment.Center) {
-        val diameter=minOf(128.dp,maxWidth,maxHeight.coerceAtLeast(24.dp))
-        VirtualJoystick(enabled,onValue,onTouch,diameter)
+        val diameter=minOf(104.dp,maxWidth,(maxHeight-24.dp).coerceAtLeast(24.dp))
+        Column(horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+            StickReadout(value.x,value.y,xAxis,yAxis,touching)
+            VirtualJoystick(enabled,onValue,onTouch,diameter)
+        }
     }
 }
 

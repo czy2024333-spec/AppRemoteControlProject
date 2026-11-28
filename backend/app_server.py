@@ -18,6 +18,7 @@ from http_transport import JsonHandler, TransportError, validate_origins
 from runtime_info import IMPLEMENTATION_VERSION, is_continuous
 from control_config import CAPABILITIES, DEFAULT, update as update_config, validate as validate_config
 from input_protocol import SUPPORTED, voice_result, ring_event
+from stall_guard import StallGuard
 
 CORE_DIR = Path(__file__).resolve().parent/'core'
 sys.path.insert(0, str(CORE_DIR))
@@ -85,6 +86,7 @@ class SimulationService:
         self.transition = 'INITIAL_HOLD'
         self.failure = None
         self.latest = None
+        self.stall_guard = StallGuard(dt=self.core.dt)
         self.publish()
 
     def authenticate(self, header):
@@ -668,7 +670,16 @@ class SimulationService:
         try:
             while not self.stopping.is_set():
                 now = time.monotonic()
-                if now-last>.1 or now-next_tick>.08:
+                stalled, diag = self.stall_guard.check(now, last, next_tick)
+                if diag['reason'] is not None:
+                    # 卡顿留痕：SINGLE_SLOW 只审计不锁存，保护与否以 stalled 为准。
+                    diag['owner_present'] = self.owner is not None
+                    if self.audit_sink is not None:
+                        self.audit_sink.emit(dict(
+                            event='SCHEDULER_STALL' if stalled else 'SCHEDULER_SLOW',
+                            server_time_ms=time.time()*1000, device_id=self.device_id,
+                            boot_id=self.boot_id, **diag))
+                if stalled:
                     self.core.protect('SCHEDULER_STALL')
                     self.clear_selection('SCHEDULER_STALL')
                     self.new_epoch('SCHEDULER_STALL')
@@ -715,7 +726,11 @@ class SimulationService:
                 now = time.monotonic()
                 if now >= next_tick:
                     self.tick()
-                    next_tick += self.core.dt
+                    # 卡顿后不补跑积压的 tick，否则会连续空转并再次触发保护。
+                    if now - next_tick >= self.core.dt:
+                        next_tick = now + self.core.dt
+                    else:
+                        next_tick += self.core.dt
                 self.stopping.wait(max(0.,min(.002,next_tick-time.monotonic())))
         except Exception as exc:
             with self.lock:

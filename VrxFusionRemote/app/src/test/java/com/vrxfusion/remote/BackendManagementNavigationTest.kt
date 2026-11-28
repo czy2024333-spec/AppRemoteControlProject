@@ -235,7 +235,15 @@ class BackendManagementNavigationTest {
                 waitFor(vm,server) {vm.flightGateway.connected.value && vm.flightGateway.canWrite()}
                 rule.onNodeWithTag("management-back").performClick();rule.mainClock.advanceTimeBy(400)
                 rule.onNodeWithText("01  独立操纵").performScrollTo().performClick();rule.mainClock.advanceTimeBy(400)
-                rule.onNodeWithText("申请控制").performClick()
+                // 导航按 Compose 时钟推进，HTTP/SSE 按墙钟恢复；不能把过渡结束当成连接已恢复。
+                waitFor(vm,server) {vm.flightGateway.connected.value && !vm.flightGateway.stale.value && vm.flightGateway.canWrite()}
+                // 恢复后保留错误提示时合法按钮为“重新申请”，它仍要求用户显式接管。
+                val claim=hasText("申请控制") or hasText("重新申请")
+                rule.waitUntil(8000) {
+                    rule.mainClock.advanceTimeByFrame()
+                    rule.onAllNodes(claim).fetchSemanticsNodes().size==1
+                }
+                rule.onNode(claim).assertIsEnabled().performClick()
                 waitFor(vm,server) {vm.flightGateway.phase.value==LinkPhase.READY && !vm.flightGateway.busy.value}
                 rule.onNodeWithContentDescription("飞行设置").performClick();rule.mainClock.advanceTimeBy(600)
                 rule.onNodeWithText("连接状态").performClick();rule.mainClock.advanceTimeBy(250)

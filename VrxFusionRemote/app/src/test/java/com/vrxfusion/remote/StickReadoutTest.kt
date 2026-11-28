@@ -18,6 +18,16 @@ class StickReadoutTest {
         stickReadoutLines(x, y, xAxis, yAxis)
 
     @Test
+    fun deliveryAcceptanceFivePercentIsNeutralAndTenPercentShowsEveryDirection() {
+        for (axis in StickAxis.values()) {
+            assertEquals("${axis.label} 中位",axis.text(.05f))
+            assertEquals("${axis.label} 中位",axis.text(-.05f))
+            assertEquals("${axis.label} ${axis.positive} 10%",axis.text(.1f))
+            assertEquals("${axis.label} ${axis.negative} 10%",axis.text(-.1f))
+        }
+    }
+
+    @Test
     fun deadZoneShowsNeutralAndBoundaryIsInclusive() {
         assertEquals("转向 中位" to "升降 中位", lines(0f, 0f, StickAxis.YAW, StickAxis.VERTICAL))
         // 5% 处在死区内，两行都显示中位

@@ -46,7 +46,7 @@ fun FlightHomeScreen(onSingle: ()->Unit,onCluster: ()->Unit,onManageConnections:
 @Composable
 private fun HomeEntry(title: String,subtitle: String,note: String,onClick: ()->Unit) {
     val interaction=remember { MutableInteractionSource() }
-    Column(Modifier.fillMaxWidth().motionPress(interaction).clip(RoundedCornerShape(20.dp))
+    Column(Modifier.fillMaxWidth().pressScale(interaction).clip(RoundedCornerShape(20.dp))
         .background(SurfaceCard).clickable(interactionSource=interaction,
             indication=LocalIndication.current,onClick=onClick).padding(22.dp),
         verticalArrangement=Arrangement.spacedBy(10.dp)) {

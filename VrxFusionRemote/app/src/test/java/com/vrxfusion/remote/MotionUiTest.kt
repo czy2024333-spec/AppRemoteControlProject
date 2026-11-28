@@ -6,6 +6,7 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
@@ -14,11 +15,22 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.drawToBitmap
 import androidx.lifecycle.ViewModelProvider
+import com.vrxfusion.remote.rotorpy.LinkPhase
+import com.vrxfusion.remote.rotorpy.RotorPyClient
+import kotlinx.coroutines.*
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 import com.vrxfusion.remote.ui.*
 import com.vrxfusion.remote.ui.theme.VrxTheme
 import org.junit.Assert.*
@@ -156,6 +168,125 @@ class MotionUiTest {
         rule.runOnIdle {assertEquals(0,clicks)}
         rule.onNodeWithText("01  独立操纵").performTouchInput {up()}
         rule.runOnIdle {assertEquals(1,clicks)}
+    }
+    @Test fun pressScaleLongHoldDoesNotClickUntilReleaseAndNeverRepeats() {
+        var clicks=0
+        val measuredSizes=mutableListOf<androidx.compose.ui.unit.IntSize>()
+        rule.mainClock.autoAdvance=false
+        rule.setContent {VrxTheme {
+            val interaction=remember { MutableInteractionSource() }
+            Button(onClick={clicks++},interactionSource=interaction,
+                modifier=Modifier.onSizeChanged {measuredSizes+=it}
+                    .testTag("press-scale-target").pressScale(interaction)) {Text("停止")}
+        }}
+        frames()
+        val sizeBefore=measuredSizes.last()
+        val restBounds=rule.onNodeWithTag("press-scale-target").fetchSemanticsNode().boundsInRoot
+        rule.onNodeWithTag("press-scale-target").performTouchInput {down(center)}
+        frames(120)
+        rule.runOnIdle {assertEquals("按下只更新视觉状态，不能提前点击",0,clicks)}
+        frames(480)
+        rule.runOnIdle {assertEquals("长按期间不能重复触发",0,clicks)}
+        assertEquals("graphicsLayer 按压反馈不改变组件测量尺寸",sizeBefore,measuredSizes.last())
+        val pressedBounds=rule.onNodeWithTag("press-scale-target").fetchSemanticsNode().boundsInRoot
+        assertTrue("按下时应实际缩放",pressedBounds.width<restBounds.width)
+        rule.onNodeWithTag("press-scale-target").performTouchInput {up()}
+        rule.runOnIdle {assertEquals("松手后原 Button 回调只触发一次",1,clicks)}
+        frames(120)
+        val settledBounds=rule.onNodeWithTag("press-scale-target").fetchSemanticsNode().boundsInRoot
+        // 允许 0.5px 栅格化误差；Compose 按帧采样，120ms 目标落在帧边界之间。
+        assertEquals("120ms 后水平位置复原",restBounds.left,settledBounds.left,.5f)
+        assertEquals("120ms 后顶部复原",restBounds.top,settledBounds.top,.5f)
+        assertEquals("120ms 后右边界复原",restBounds.right,settledBounds.right,.5f)
+        assertEquals("120ms 后底部复原",restBounds.bottom,settledBounds.bottom,.5f)
+    }
+    @Test fun safetyButtonGesturesSendOneStopPerReleaseAndNoMotionRequests() {
+        val requests=CopyOnWriteArrayList<String>()
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
+        MockWebServer().use { server ->
+            server.dispatcher=object: Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    requests+=request.path.orEmpty()
+                    return when(request.path) {
+                        "/api/state" -> MockResponse().setBody("""{"ok":true,"data":{"boot_id":"press-test","sequence":0,"mode":"HOLD","control_epoch":"e","selected_source":"app"}}""")
+                        "/api/events" -> MockResponse().addHeader("Content-Type","text/event-stream")
+                            .setBody((1..1000).joinToString("") {
+                                "data: {\"boot_id\":\"press-test\",\"sequence\":$it,\"mode\":\"HOLD\",\"control_epoch\":\"e\",\"selected_source\":\"app\"}\n\n".padEnd(260,'\n')
+                            }).throttleBody(260,40,TimeUnit.MILLISECONDS)
+                        else -> MockResponse().setBody("""{"ok":true,"data":{"session_id":"s","control_epoch":"e","command_status":"COMPLETED"}}""")
+                    }
+                }
+            }
+            server.start()
+            val client=RotorPyClient(server.url("/").toString(),"demo-app-token-2026")
+            try {
+                client.startPolling(scope)
+                rule.waitUntil(5000) {client.connected.value}
+                client.retryHandshake(scope)
+                rule.waitUntil(5000) {client.phase.value==LinkPhase.READY && !client.busy.value}
+                rule.mainClock.autoAdvance=false
+                rule.setContent {VrxTheme {FlightSafetyButtons(true,
+                    {scope.launch {client.stop()}},{scope.launch {client.protect()}})}}
+                frames()
+                rule.onNodeWithText("停止").performTouchInput {down(center);advanceEventTime(650)}
+                frames(650)
+                assertEquals("真实按压期间不能发送停止或运动",0,requests.count {it=="/api/stop" || it=="/api/input"})
+                rule.onNodeWithText("停止").performTouchInput {up()}
+                rule.waitUntil(5000) {requests.count {it=="/api/stop"}==1 && !client.safetyBusy.value}
+                repeat(2) { index ->
+                    rule.onNodeWithText("停止").performTouchInput {click()}
+                    rule.waitUntil(5000) {requests.count {it=="/api/stop"}==index+2 && !client.safetyBusy.value}
+                }
+                rule.onNodeWithText("停止").performTouchInput {down(center);cancel()}
+                frames(200)
+                rule.runOnIdle {
+                    assertEquals("三次有效松手只产生三条停止请求，取消不产生请求",3,requests.count {it=="/api/stop"})
+                    assertEquals("按压不能额外产生 /api/input",0,requests.count {it=="/api/input"})
+                }
+                println("D3_HTTP_EVIDENCE stop=${requests.count {it=="/api/stop"}} input=${requests.count {it=="/api/input"}}")
+            } finally {client.stopPolling();scope.cancel()}
+        }
+    }
+    @Test fun reducedMotionKeepsPressedButtonAtRestWithoutSuppressingClick() {
+        var clicks=0
+        rule.mainClock.autoAdvance=false
+        rule.setContent {VrxTheme {CompositionLocalProvider(LocalAppMotionEnabled provides false) {
+            val interaction=remember {MutableInteractionSource()}
+            Button(onClick={clicks++},interactionSource=interaction,
+                modifier=Modifier.testTag("reduced-press").pressScale(interaction,StopPressScale)) {Text("停止")}
+        }}}
+        frames()
+        val rest=rule.onNodeWithTag("reduced-press").fetchSemanticsNode().boundsInRoot
+        rule.onNodeWithTag("reduced-press").performTouchInput {down(center)}
+        frames(200)
+        assertEquals(rest,rule.onNodeWithTag("reduced-press").fetchSemanticsNode().boundsInRoot)
+        rule.onNodeWithTag("reduced-press").performTouchInput {up()}
+        rule.runOnIdle {assertEquals(1,clicks)}
+    }
+    @Test fun stickReadoutShowsAcceptanceValuesAndFadesWithoutChangingMeasuredSize() {
+        val x=mutableStateOf(.05f);val touching=mutableStateOf(true)
+        val measuredSizes=mutableListOf<androidx.compose.ui.unit.IntSize>()
+        rule.mainClock.autoAdvance=false
+        rule.setContent {VrxTheme {Box(Modifier.size(160.dp).background(Color.Black)
+            .onSizeChanged {measuredSizes+=it}) {
+            StickReadout(x.value,0f,StickAxis.YAW,StickAxis.VERTICAL,touching.value)
+        }}}
+        frames(240)
+        rule.onNodeWithText("转向 中位").assertExists()
+        change {x.value=.1f};frames()
+        rule.onNodeWithText("转向 右 10%").assertExists()
+        val size=measuredSizes.last()
+        fun capture()=rule.runOnIdle {rule.activity.findViewById<View>(android.R.id.content)
+            .drawToBitmap(Bitmap.Config.ARGB_8888)}
+        val visible=capture()
+        change {touching.value=false};frames(96)
+        val fading=capture()
+        frames(144)
+        val hidden=capture()
+        assertFalse("淡出中途应有真实像素变化",visible.sameAs(fading))
+        assertFalse("淡出结束应不同于中途",fading.sameAs(hidden))
+        assertEquals("淡出不改变测量尺寸",size,measuredSizes.last())
+        visible.recycle();fading.recycle();hidden.recycle()
     }
     @Test fun navigationPreviewHasABoundedPixelSizeEvenOnVeryLargeDisplays() {
         val view=View(rule.activity)
